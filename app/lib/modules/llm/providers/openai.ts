@@ -7,24 +7,24 @@ import { createOpenAI } from '@ai-sdk/openai';
 export default class OpenAIProvider extends BaseProvider {
   name = 'OpenAI';
   getApiKeyLink = 'https://platform.openai.com/api-keys';
+  supportsApiKey = true;
+  supportsAccountAuth = true;
+  requiresAuthForModels = true;
+  unavailableMessage = 'Модели недоступны. Войдите в OpenAI аккаунт или подключите API key.';
 
   config = {
     apiTokenKey: 'OPENAI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    { name: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4-turbo', label: 'GPT-4 Turbo', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4', label: 'GPT-4', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: 'OpenAI', maxTokenAllowed: 8000 },
-  ];
+  staticModels: ModelInfo[] = [];
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,
     settings?: IProviderSetting,
     serverEnv?: Record<string, string>,
   ): Promise<ModelInfo[]> {
+    const authMode = settings?.authMode || 'apiKey';
+
     const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings: settings,
@@ -34,6 +34,10 @@ export default class OpenAIProvider extends BaseProvider {
     });
 
     if (!apiKey) {
+      if (authMode === 'account') {
+        return [];
+      }
+
       throw `Missing Api Key configuration for ${this.name} provider`;
     }
 
@@ -58,6 +62,7 @@ export default class OpenAIProvider extends BaseProvider {
       label: `${m.id}`,
       provider: this.name,
       maxTokenAllowed: m.context_window || 32000,
+      source: 'dynamic',
     }));
   }
 
@@ -68,6 +73,7 @@ export default class OpenAIProvider extends BaseProvider {
     providerSettings?: Record<string, IProviderSetting>;
   }): LanguageModelV1 {
     const { model, serverEnv, apiKeys, providerSettings } = options;
+    const authMode = providerSettings?.[this.name]?.authMode || 'apiKey';
 
     const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
@@ -78,6 +84,12 @@ export default class OpenAIProvider extends BaseProvider {
     });
 
     if (!apiKey) {
+      if (authMode === 'account') {
+        throw new Error(
+          'OpenAI account mode is desktop-only and must use the account bridge transport instead of server API-key transport.',
+        );
+      }
+
       throw new Error(`Missing API key for ${this.name} provider`);
     }
 

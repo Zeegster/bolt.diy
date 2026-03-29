@@ -5,6 +5,7 @@ import * as providers from './registry';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('LLMManager');
+const STATIC_MODEL_LOCAL_PROVIDERS = new Set(['OpenAILike', 'LMStudio', 'Ollama']);
 export class LLMManager {
   private static _instance: LLMManager;
   private _providers: Map<string, BaseProvider> = new Map();
@@ -59,7 +60,6 @@ export class LLMManager {
 
     logger.info('Registering Provider: ', provider.name);
     this._providers.set(provider.name, provider);
-    this._modelList = [...this._modelList, ...provider.staticModels];
   }
 
   getProvider(name: string): BaseProvider | undefined {
@@ -68,6 +68,77 @@ export class LLMManager {
 
   getAllProviders(): BaseProvider[] {
     return Array.from(this._providers.values());
+  }
+
+  private _providerHasModelAuth(
+    provider: BaseProvider,
+    options: {
+      apiKeys?: Record<string, string>;
+      providerSettings?: Record<string, IProviderSetting>;
+      serverEnv?: Record<string, string>;
+    },
+  ) {
+    const requiresModelAuth = this._requiresModelAuth(provider);
+
+    if (!requiresModelAuth) {
+      return true;
+    }
+
+    const providerSetting = options.providerSettings?.[provider.name];
+    const authMode = providerSetting?.authMode || 'apiKey';
+
+    if (provider.supportsAccountAuth && authMode === 'account') {
+      return true;
+    }
+
+    const apiTokenKey = provider.config.apiTokenKey;
+
+    if (!apiTokenKey) {
+      return true;
+    }
+
+    return Boolean(
+      options.apiKeys?.[provider.name] ||
+        options.serverEnv?.[apiTokenKey] ||
+        process.env[apiTokenKey] ||
+        this.env?.[apiTokenKey],
+    );
+  }
+
+  private _isLocalProvider(provider: BaseProvider) {
+    return STATIC_MODEL_LOCAL_PROVIDERS.has(provider.name);
+  }
+
+  private _requiresModelAuth(provider: BaseProvider) {
+    if (typeof provider.requiresAuthForModels === 'boolean') {
+      return provider.requiresAuthForModels;
+    }
+
+    if (this._isLocalProvider(provider)) {
+      return false;
+    }
+
+    return Boolean(provider.config.apiTokenKey);
+  }
+
+  private _isProviderEnabled(
+    provider: BaseProvider,
+    options: {
+      providerSettings?: Record<string, IProviderSetting>;
+    },
+  ) {
+    const settings = options.providerSettings;
+
+    if (!settings || Object.keys(settings).length === 0) {
+      return true;
+    }
+
+    return settings[provider.name]?.enabled !== false;
+  }
+
+  private _canUseStaticModels(provider: BaseProvider) {
+    // Strict policy for cloud providers: no static fallback model catalogs.
+    return this._isLocalProvider(provider);
   }
 
   getModelList(): ModelInfo[] {
@@ -80,17 +151,14 @@ export class LLMManager {
     serverEnv?: Record<string, string>;
   }): Promise<ModelInfo[]> {
     const { apiKeys, providerSettings, serverEnv } = options;
-
-    let enabledProviders = Array.from(this._providers.values()).map((p) => p.name);
-
-    if (providerSettings && Object.keys(providerSettings).length > 0) {
-      enabledProviders = enabledProviders.filter((p) => providerSettings[p].enabled);
-    }
+    const enabledProviders = Array.from(this._providers.values()).filter((provider) =>
+      this._isProviderEnabled(provider, options),
+    );
 
     // Get dynamic models from all providers that support them
     const dynamicModels = await Promise.all(
-      Array.from(this._providers.values())
-        .filter((provider) => enabledProviders.includes(provider.name))
+      enabledProviders
+        .filter((provider) => this._providerHasModelAuth(provider, options))
         .filter(
           (provider): provider is BaseProvider & Required<Pick<ProviderInfo, 'getDynamicModels'>> =>
             !!provider.getDynamicModels,
@@ -118,20 +186,25 @@ export class LLMManager {
           return dynamicModels;
         }),
     );
-    const staticModels = Array.from(this._providers.values()).flatMap((p) => p.staticModels || []);
+    const staticModels = enabledProviders
+      .filter((provider) => this._providerHasModelAuth(provider, options))
+      .filter((provider) => this._canUseStaticModels(provider))
+      .flatMap((provider) => provider.staticModels || []);
     const dynamicModelsFlat = dynamicModels.flat();
     const dynamicModelKeys = dynamicModelsFlat.map((d) => `${d.name}-${d.provider}`);
-    const filteredStaticModesl = staticModels.filter((m) => !dynamicModelKeys.includes(`${m.name}-${m.provider}`));
+    const filteredStaticModels = staticModels.filter((m) => !dynamicModelKeys.includes(`${m.name}-${m.provider}`));
 
     // Combine static and dynamic models
-    const modelList = [...dynamicModelsFlat, ...filteredStaticModesl];
+    const modelList = [...dynamicModelsFlat, ...filteredStaticModels];
     modelList.sort((a, b) => a.name.localeCompare(b.name));
     this._modelList = modelList;
 
     return modelList;
   }
   getStaticModelList() {
-    return [...this._providers.values()].flatMap((p) => p.staticModels || []);
+    return [...this._providers.values()]
+      .filter((provider) => this._canUseStaticModels(provider))
+      .flatMap((p) => p.staticModels || []);
   }
   async getModelListFromProvider(
     providerArg: BaseProvider,
@@ -147,7 +220,11 @@ export class LLMManager {
       throw new Error(`Provider ${providerArg.name} not found`);
     }
 
-    const staticModels = provider.staticModels || [];
+    if (!this._providerHasModelAuth(provider, options)) {
+      return [];
+    }
+
+    const staticModels = this._canUseStaticModels(provider) ? provider.staticModels || [] : [];
 
     if (!provider.getDynamicModels) {
       return staticModels;
@@ -163,7 +240,13 @@ export class LLMManager {
 
     if (cachedModels) {
       logger.info(`Found ${cachedModels.length} cached models for ${provider.name}`);
-      return [...cachedModels, ...staticModels];
+
+      const cachedModelNames = new Set(cachedModels.map((model) => model.name));
+      const filteredStaticModels = staticModels.filter((model) => !cachedModelNames.has(model.name));
+      const modelList = [...cachedModels, ...filteredStaticModels];
+      modelList.sort((a, b) => a.name.localeCompare(b.name));
+
+      return modelList;
     }
 
     logger.info(`Getting dynamic models for ${provider.name}`);
@@ -194,16 +277,21 @@ export class LLMManager {
       throw new Error(`Provider ${providerArg.name} not found`);
     }
 
+    if (!this._canUseStaticModels(provider)) {
+      return [];
+    }
+
     return [...(provider.staticModels || [])];
   }
 
   getDefaultProvider(): BaseProvider {
-    const firstProvider = this._providers.values().next().value;
+    const preferredProvider =
+      this._providers.get('OpenAI') || this._providers.get('Anthropic') || this._providers.values().next().value;
 
-    if (!firstProvider) {
+    if (!preferredProvider) {
       throw new Error('No providers registered');
     }
 
-    return firstProvider;
+    return preferredProvider;
   }
 }

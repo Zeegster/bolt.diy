@@ -1,6 +1,7 @@
 import { getSystemPrompt } from './prompts/prompts';
 import optimized from './prompts/optimized';
 import { getFineTunedPrompt } from './prompts/new-prompt';
+import { getPublisherPrompt } from './prompts/publisher';
 
 export interface PromptOptions {
   cwd: string;
@@ -39,6 +40,11 @@ export class PromptLibrary {
       label: 'Optimized Prompt (experimental)',
       description: 'an Experimental version of the prompt for lower token usage',
       get: (options) => optimized(options),
+    },
+    publisher: {
+      label: 'Publisher Mode',
+      description: 'Contract-first prompt for zone, block, and token driven static site assembly',
+      get: (options) => getPublisherPrompt(options.cwd),
     },
   };
   static getList() {

@@ -21,6 +21,7 @@ export default defineConfig({
 
         // Add all Node.js built-in modules as external
         'node:fs',
+        'node:child_process',
         'node:path',
         'node:url',
         'node:util',

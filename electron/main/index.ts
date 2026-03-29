@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { createRequestHandler } from '@remix-run/node';
-import electron, { app, BrowserWindow, ipcMain, protocol, session } from 'electron';
+import electron, { app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
 import log from 'electron-log';
 import path from 'node:path';
 import * as pkg from '../../package.json';
@@ -12,6 +12,25 @@ import { createWindow } from './ui/window';
 import { initCookies, storeCookies } from './utils/cookie';
 import { loadServerBuild, serveAsset } from './utils/serve';
 import { reloadOnChange } from './utils/reload';
+import {
+  cancelCodexLogin,
+  getCodexAuthStatus,
+  interruptCodexTurn,
+  listCodexModels,
+  resetCodexThread,
+  startCodexLogin,
+  startCodexTurn,
+  subscribeCodexBridgeEvents,
+} from './utils/codex-auth';
+import {
+  getClaudeAuthStatus,
+  interruptClaudeTurn,
+  listClaudeModels,
+  resetClaudeThread,
+  startClaudeLogin,
+  startClaudeTurn,
+  subscribeClaudeBridgeEvents,
+} from './utils/claude-auth';
 
 Object.assign(console, log.functions);
 
@@ -186,6 +205,85 @@ declare global {
     let count = 0;
     setInterval(() => win.webContents.send('ping', `hello from main! ${count++}`), 60 * 1000);
     ipcMain.handle('ipcTest', (event, ...args) => console.log('ipc: renderer -> main', { event, ...args }));
+    const unsubscribeCodexEvents = subscribeCodexBridgeEvents((bridgeEvent) => {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send('codex-auth:event', bridgeEvent);
+        }
+      }
+    });
+    const unsubscribeClaudeEvents = subscribeClaudeBridgeEvents((bridgeEvent) => {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send('claude-auth:event', bridgeEvent);
+        }
+      }
+    });
+    app.once('before-quit', () => {
+      unsubscribeCodexEvents();
+      unsubscribeClaudeEvents();
+    });
+
+    ipcMain.handle('codex-auth:get-status', async () => getCodexAuthStatus({ refreshToken: false }));
+    ipcMain.handle('codex-auth:start-login', async () => {
+      const result = await startCodexLogin();
+
+      if (result.authUrl) {
+        await shell.openExternal(result.authUrl);
+      }
+
+      return result;
+    });
+    ipcMain.handle('codex-auth:cancel-login', async (_event, payload?: { loginId?: string }) =>
+      cancelCodexLogin(payload?.loginId),
+    );
+    ipcMain.handle('codex-auth:list-models', async (_event, payload?: { limit?: number; includeHidden?: boolean }) =>
+      listCodexModels(payload),
+    );
+    ipcMain.handle(
+      'codex-auth:turn-start',
+      async (
+        _event,
+        payload: {
+          input: string;
+          model?: string;
+          cwd?: string;
+          effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+        },
+      ) => startCodexTurn(payload),
+    );
+    ipcMain.handle('codex-auth:turn-interrupt', async (_event, payload?: { threadId?: string; turnId?: string }) =>
+      interruptCodexTurn(payload),
+    );
+    ipcMain.handle('codex-auth:thread-reset', async () => {
+      await resetCodexThread();
+      return { ok: true };
+    });
+
+    ipcMain.handle('claude-auth:get-status', async () => getClaudeAuthStatus());
+    ipcMain.handle('claude-auth:start-login', async () => startClaudeLogin());
+    ipcMain.handle('claude-auth:list-models', async (_event, payload?: { includeHidden?: boolean }) =>
+      listClaudeModels(payload),
+    );
+    ipcMain.handle(
+      'claude-auth:turn-start',
+      async (
+        _event,
+        payload: {
+          input: string;
+          model?: string;
+          cwd?: string;
+          effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+        },
+      ) => startClaudeTurn(payload),
+    );
+    ipcMain.handle('claude-auth:turn-interrupt', async (_event, payload?: { threadId?: string; turnId?: string }) =>
+      interruptClaudeTurn(payload),
+    );
+    ipcMain.handle('claude-auth:thread-reset', async () => {
+      await resetClaudeThread();
+      return { ok: true };
+    });
 
     return win;
   })

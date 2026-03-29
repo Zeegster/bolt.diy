@@ -1,13 +1,15 @@
 import { type Message } from 'ai';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX } from '~/utils/constants';
+import { MODEL_REGEX, PROVIDER_REGEX } from '~/utils/constants';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';
 
 export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
-  model: string;
-  provider: string;
-  content: string;
+  model?: string;
+  provider?: string;
+  content: Message['content'];
+  hasModelTag: boolean;
+  hasProviderTag: boolean;
 } {
   const textContent = Array.isArray(message.content)
     ? message.content.find((item) => item.type === 'text')?.text || ''
@@ -16,17 +18,8 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
 
-  /*
-   * Extract model
-   * const modelMatch = message.content.match(MODEL_REGEX);
-   */
-  const model = modelMatch ? modelMatch[1] : DEFAULT_MODEL;
-
-  /*
-   * Extract provider
-   * const providerMatch = message.content.match(PROVIDER_REGEX);
-   */
-  const provider = providerMatch ? providerMatch[1] : DEFAULT_PROVIDER.name;
+  const model = modelMatch?.[1]?.trim();
+  const provider = providerMatch?.[1]?.trim();
 
   const cleanedContent = Array.isArray(message.content)
     ? message.content.map((item) => {
@@ -41,7 +34,13 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
       })
     : textContent.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '');
 
-  return { model, provider, content: cleanedContent };
+  return {
+    model,
+    provider,
+    content: cleanedContent,
+    hasModelTag: Boolean(model),
+    hasProviderTag: Boolean(provider),
+  };
 }
 
 export function simplifyBoltActions(input: string): string {

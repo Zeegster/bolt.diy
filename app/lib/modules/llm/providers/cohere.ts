@@ -7,6 +7,10 @@ import { createCohere } from '@ai-sdk/cohere';
 export default class CohereProvider extends BaseProvider {
   name = 'Cohere';
   getApiKeyLink = 'https://dashboard.cohere.com/api-keys';
+  supportsApiKey = true;
+  supportsAccountAuth = false;
+  requiresAuthForModels = true;
+  unavailableMessage = 'Модели недоступны. Подключите API key.';
 
   config = {
     apiTokenKey: 'COHERE_API_KEY',
@@ -24,6 +28,65 @@ export default class CohereProvider extends BaseProvider {
     { name: 'c4ai-aya-expanse-8b', label: 'c4AI Aya Expanse 8b', provider: 'Cohere', maxTokenAllowed: 4096 },
     { name: 'c4ai-aya-expanse-32b', label: 'c4AI Aya Expanse 32b', provider: 'Cohere', maxTokenAllowed: 4096 },
   ];
+
+  async getDynamicModels(
+    apiKeys?: Record<string, string>,
+    settings?: IProviderSetting,
+    serverEnv?: Record<string, string>,
+  ): Promise<ModelInfo[]> {
+    const { apiKey } = this.getProviderBaseUrlAndKey({
+      apiKeys,
+      providerSettings: settings,
+      serverEnv: serverEnv as any,
+      defaultBaseUrlKey: '',
+      defaultApiTokenKey: 'COHERE_API_KEY',
+    });
+
+    if (!apiKey) {
+      return [];
+    }
+
+    const response = await fetch('https://api.cohere.com/v1/models', {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Cohere models request failed: ${response.status} ${response.statusText} ${text}`);
+    }
+
+    const payload = (await response.json()) as any;
+    const modelsFromApi = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.models)
+        ? payload.models
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+
+    const staticModelIds = new Set(this.staticModels.map((model) => model.name));
+
+    return modelsFromApi
+      .map((model: any) => {
+        const name = model?.name || model?.id;
+        const contextLength = model?.context_length || model?.contextLength || model?.max_input_tokens || 4096;
+
+        return name
+          ? {
+              name,
+              label: name,
+              provider: this.name,
+              maxTokenAllowed: contextLength,
+              source: 'dynamic' as const,
+            }
+          : null;
+      })
+      .filter((model: ModelInfo | null): model is ModelInfo => Boolean(model))
+      .filter((model: ModelInfo) => !staticModelIds.has(model.name));
+  }
 
   getModelInstance(options: {
     model: string;

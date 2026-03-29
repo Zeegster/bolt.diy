@@ -26,27 +26,98 @@ export interface SupabaseConnectionState {
   credentials?: SupabaseCredentials;
 }
 
-const savedConnection = typeof localStorage !== 'undefined' ? localStorage.getItem('supabase_connection') : null;
-const savedCredentials = typeof localStorage !== 'undefined' ? localStorage.getItem('supabaseCredentials') : null;
-
-const initialState: SupabaseConnectionState = savedConnection
-  ? JSON.parse(savedConnection)
-  : {
-      user: null,
-      token: '',
-      stats: undefined,
-      selectedProjectId: undefined,
-      isConnected: false,
-      project: undefined,
-    };
-
-if (savedCredentials && !initialState.credentials) {
-  try {
-    initialState.credentials = JSON.parse(savedCredentials);
-  } catch (e) {
-    console.error('Failed to parse saved credentials:', e);
+const isStorageAvailable = () => {
+  if (typeof window === 'undefined') {
+    return false;
   }
-}
+
+  return (
+    typeof localStorage !== 'undefined' &&
+    typeof localStorage.getItem === 'function' &&
+    typeof localStorage.setItem === 'function' &&
+    typeof localStorage.removeItem === 'function'
+  );
+};
+
+const getStoredValue = <T>(key: string): T | null => {
+  if (!isStorageAvailable()) {
+    return null;
+  }
+
+  try {
+    const value = localStorage.getItem(key);
+
+    if (!value) {
+      return null;
+    }
+
+    return JSON.parse(value) as T;
+  } catch (error) {
+    console.error(`Failed to read "${key}" from localStorage:`, error);
+    return null;
+  }
+};
+
+const setStoredValue = (key: string, value: unknown): void => {
+  if (!isStorageAvailable()) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Failed to write "${key}" to localStorage:`, error);
+  }
+};
+
+const removeStoredValue = (key: string): void => {
+  if (!isStorageAvailable()) {
+    return;
+  }
+
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.error(`Failed to remove "${key}" from localStorage:`, error);
+  }
+};
+
+const getInitialState = (): SupabaseConnectionState => {
+  const defaults: SupabaseConnectionState = {
+    user: null,
+    token: '',
+    stats: undefined,
+    selectedProjectId: undefined,
+    isConnected: false,
+    project: undefined,
+    credentials: undefined,
+  };
+
+  const savedConnection = getStoredValue<SupabaseConnectionState>('supabase_connection');
+
+  if (!savedConnection) {
+    return defaults;
+  }
+
+  if (typeof savedConnection !== 'object' || savedConnection === null) {
+    return defaults;
+  }
+
+  const initialState: SupabaseConnectionState = {
+    ...defaults,
+    ...savedConnection,
+  };
+
+  const savedCredentials = getStoredValue<SupabaseCredentials>('supabaseCredentials');
+
+  if (savedCredentials && typeof savedCredentials === 'object' && !initialState.credentials) {
+    initialState.credentials = savedCredentials;
+  }
+
+  return initialState;
+};
+
+const initialState: SupabaseConnectionState = getInitialState();
 
 export const supabaseConnection = atom<SupabaseConnectionState>(initialState);
 
@@ -98,16 +169,16 @@ export function updateSupabaseConnection(connection: Partial<SupabaseConnectionS
    * Always save the connection state to localStorage to persist across chats
    */
   if (connection.user || connection.token || connection.selectedProjectId !== undefined || connection.credentials) {
-    localStorage.setItem('supabase_connection', JSON.stringify(newState));
+    setStoredValue('supabase_connection', newState);
 
     if (newState.credentials) {
-      localStorage.setItem('supabaseCredentials', JSON.stringify(newState.credentials));
+      setStoredValue('supabaseCredentials', newState.credentials);
     } else {
-      localStorage.removeItem('supabaseCredentials');
+      removeStoredValue('supabaseCredentials');
     }
   } else {
-    localStorage.removeItem('supabase_connection');
-    localStorage.removeItem('supabaseCredentials');
+    removeStoredValue('supabase_connection');
+    removeStoredValue('supabaseCredentials');
   }
 }
 

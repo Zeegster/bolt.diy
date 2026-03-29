@@ -2,7 +2,7 @@ import { generateText, type CoreTool, type GenerateTextResult, type Message } fr
 import ignore from 'ignore';
 import type { IProviderSetting } from '~/types/model';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
+import { PROVIDER_LIST } from '~/utils/constants';
 import { createFilesContext, extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -24,13 +24,19 @@ export async function selectContext(props: {
   onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
 }) {
   const { messages, env: serverEnv, apiKeys, files, providerSettings, summary, onFinish } = props;
-  let currentModel = DEFAULT_MODEL;
-  let currentProvider = DEFAULT_PROVIDER.name;
+  let currentModel: string | undefined;
+  let currentProvider: string | undefined;
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
       const { model, provider, content } = extractPropertiesFromMessage(message);
-      currentModel = model;
-      currentProvider = provider;
+
+      if (model) {
+        currentModel = model;
+      }
+
+      if (provider) {
+        currentProvider = provider;
+      }
 
       return { ...message, content };
     } else if (message.role == 'assistant') {
@@ -47,33 +53,37 @@ export async function selectContext(props: {
     return message;
   });
 
-  const provider = PROVIDER_LIST.find((p) => p.name === currentProvider) || DEFAULT_PROVIDER;
-  const staticModels = LLMManager.getInstance().getStaticModelListFromProvider(provider);
-  let modelDetails = staticModels.find((m) => m.name === currentModel);
+  if (!currentProvider) {
+    throw new Error('Provider metadata is missing in the chat request. Re-select provider and model, then retry.');
+  }
+
+  if (!currentModel) {
+    throw new Error('Model metadata is missing in the chat request. Re-select provider and model, then retry.');
+  }
+
+  const provider = PROVIDER_LIST.find((p) => p.name === currentProvider);
+
+  if (!provider) {
+    throw new Error(`Provider ${currentProvider} is not available.`);
+  }
+
+  const modelsList = await LLMManager.getInstance().getModelListFromProvider(provider, {
+    apiKeys,
+    providerSettings,
+    serverEnv: serverEnv as any,
+  });
+
+  if (!modelsList.length) {
+    throw new Error(provider.unavailableMessage || `No models found for provider ${provider.name}`);
+  }
+
+  let modelDetails = modelsList.find((m) => m.name === currentModel);
 
   if (!modelDetails) {
-    const modelsList = [
-      ...(provider.staticModels || []),
-      ...(await LLMManager.getInstance().getModelListFromProvider(provider, {
-        apiKeys,
-        providerSettings,
-        serverEnv: serverEnv as any,
-      })),
-    ];
-
-    if (!modelsList.length) {
-      throw new Error(`No models found for provider ${provider.name}`);
-    }
-
-    modelDetails = modelsList.find((m) => m.name === currentModel);
-
-    if (!modelDetails) {
-      // Fallback to first model
-      logger.warn(
-        `MODEL [${currentModel}] not found in provider [${provider.name}]. Falling back to first model. ${modelsList[0].name}`,
-      );
-      modelDetails = modelsList[0];
-    }
+    logger.warn(
+      `MODEL [${currentModel || 'empty'}] not found in provider [${provider.name}]. Falling back to first real model. ${modelsList[0].name}`,
+    );
+    modelDetails = modelsList[0];
   }
 
   const { codeContext } = extractCurrentContext(processedMessages);
@@ -169,7 +179,7 @@ export async function selectContext(props: {
 
         `,
     model: provider.getModelInstance({
-      model: currentModel,
+      model: modelDetails.name,
       serverEnv,
       apiKeys,
       providerSettings,

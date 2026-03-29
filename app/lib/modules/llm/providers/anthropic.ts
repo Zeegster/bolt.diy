@@ -7,46 +7,28 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 export default class AnthropicProvider extends BaseProvider {
   name = 'Anthropic';
   getApiKeyLink = 'https://console.anthropic.com/settings/keys';
+  supportsApiKey = true;
+  supportsAccountAuth = true;
+  requiresAuthForModels = true;
+  unavailableMessage = 'Модели недоступны. Войдите в Anthropic аккаунт или подключите API key.';
 
   config = {
     apiTokenKey: 'ANTHROPIC_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    {
-      name: 'claude-3-7-sonnet-20250219',
-      label: 'Claude 3.7 Sonnet',
-      provider: 'Anthropic',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'claude-3-5-sonnet-latest',
-      label: 'Claude 3.5 Sonnet (new)',
-      provider: 'Anthropic',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'claude-3-5-sonnet-20240620',
-      label: 'Claude 3.5 Sonnet (old)',
-      provider: 'Anthropic',
-      maxTokenAllowed: 8000,
-    },
-    {
-      name: 'claude-3-5-haiku-latest',
-      label: 'Claude 3.5 Haiku (new)',
-      provider: 'Anthropic',
-      maxTokenAllowed: 8000,
-    },
-    { name: 'claude-3-opus-latest', label: 'Claude 3 Opus', provider: 'Anthropic', maxTokenAllowed: 8000 },
-    { name: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', provider: 'Anthropic', maxTokenAllowed: 8000 },
-    { name: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', provider: 'Anthropic', maxTokenAllowed: 8000 },
-  ];
+  staticModels: ModelInfo[] = [];
 
   async getDynamicModels(
     apiKeys?: Record<string, string>,
     settings?: IProviderSetting,
     serverEnv?: Record<string, string>,
   ): Promise<ModelInfo[]> {
+    const authMode = settings?.authMode || 'apiKey';
+
+    if (authMode === 'account') {
+      return [];
+    }
+
     const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings: settings,
@@ -76,6 +58,7 @@ export default class AnthropicProvider extends BaseProvider {
       label: `${m.display_name}`,
       provider: this.name,
       maxTokenAllowed: 32000,
+      source: 'dynamic',
     }));
   }
 
@@ -86,6 +69,7 @@ export default class AnthropicProvider extends BaseProvider {
     providerSettings?: Record<string, IProviderSetting>;
   }) => LanguageModelV1 = (options) => {
     const { apiKeys, providerSettings, serverEnv, model } = options;
+    const authMode = providerSettings?.[this.name]?.authMode || 'apiKey';
     const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
       providerSettings,
@@ -93,6 +77,17 @@ export default class AnthropicProvider extends BaseProvider {
       defaultBaseUrlKey: '',
       defaultApiTokenKey: 'ANTHROPIC_API_KEY',
     });
+
+    if (!apiKey) {
+      if (authMode === 'account') {
+        throw new Error(
+          'Anthropic account mode is desktop-only and must use the account bridge transport instead of server API-key transport.',
+        );
+      }
+
+      throw new Error(`Missing API key for ${this.name} provider`);
+    }
+
     const anthropic = createAnthropic({
       apiKey,
     });

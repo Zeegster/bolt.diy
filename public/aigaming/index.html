@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Gaming — Обзоры игр нового поколения</title>
+  <style>
+    :root {
+      --bg: #0a0b0f;
+      --bg2: #10121a;
+      --bg3: #181c28;
+      --accent: #7c3aed;
+      --accent2: #06b6d4;
+      --accent3: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --border: #1e2535;
+      --red: #ef4444;
+      --green: #22c55e;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+    /* ── NAVIGATION ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 64px;
+      background: rgba(10, 11, 15, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .nav-logo .gem {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.75rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      background: var(--accent);
+      color: #fff;
+      padding: 0.45rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6rem 1.5rem 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(124,58,237,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 60%, rgba(6,182,212,0.12) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.35);
+      color: #a78bfa;
+      padding: 0.35rem 0.9rem;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      background: #7c3aed;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-weight: 900;
+      line-height: 1.1;
+      max-width: 900px;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(135deg, #fff 0%, #a78bfa 50%, #22d3ee 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 580px;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #5b21b6);
+      color: #fff;
+      padding: 0.8rem 2rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(124,58,237,0.5);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      padding: 0.8rem 2rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      background: rgba(124,58,237,0.07);
+    }
+
+    /* ── STATS ── */
+    .stats {
+      display: flex;
+      gap: 3rem;
+      margin-top: 4rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat { text-align: center; }
+
+    .stat .num {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #fff, var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat .label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── SECTION ── */
+    .section {
+      padding: 5rem 1.5rem;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+    }
+
+    .section-title span {
+      color: var(--accent2);
+    }
+
+    .see-all {
+      color: var(--accent2);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+
+    .see-all:hover { opacity: 0.75; }
+
+    /* ── FEATURED CARD (big) ── */
+    .featured-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .featured-grid { grid-template-columns: 1fr; }
+    }
+
+    .card-featured {
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      min-height: 420px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+
+    .card-featured:hover { transform: scale(1.01); }
+
+    .card-featured .cover {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      transition: transform 0.4s;
+    }
+
+    .card-featured:hover .cover { transform: scale(1.04); }
+
+    .card-featured .overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.3) 50%, transparent 100%);
+    }
+
+    .card-featured .content {
+      position: relative;
+      padding: 1.75rem;
+    }
+
+    .card-small-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .card-small {
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+
+    .card-small:hover { transform: scale(1.01); }
+    .card-small .cover { position: absolute; inset: 0; background-size: cover; background-position: center; }
+    .card-small .overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent 70%); }
+    .card-small .content { position: relative; padding: 1rem 1.25rem; }
+
+    /* ── GENRES BADGE ── */
+    .genre-tag {
+      display: inline-block;
+      background: rgba(124,58,237,0.2);
+      border: 1px solid rgba(124,58,237,0.4);
+      color: #a78bfa;
+      padding: 0.2rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .genre-tag.action { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+    .genre-tag.rpg { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.35); color: #fcd34d; }
+    .genre-tag.strategy { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.35); color: #67e8f9; }
+    .genre-tag.horror { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.35); color: #d8b4fe; }
+    .genre-tag.indie { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.35); color: #86efac; }
+    .genre-tag.shooter { background: rgba(249,115,22,0.15); border-color: rgba(249,115,22,0.35); color: #fdba74; }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 0.35rem;
+    }
+
+    .card-featured .card-title { font-size: 1.75rem; }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .score {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: var(--accent3);
+    }
+
+    .score.great { color: var(--green); }
+    .score.good { color: var(--accent3); }
+    .score.avg { color: #f97316; }
+
+    /* ── REVIEWS GRID ── */
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .review-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+
+    .review-card:hover {
+      border-color: rgba(124,58,237,0.5);
+      transform: translateY(-3px);
+    }
+
+    .review-card .thumb {
+      height: 180px;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .review-card .body {
+      padding: 1.25rem;
+    }
+
+    .review-card .game-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0.5rem 0 0.35rem;
+    }
+
+    .review-card .excerpt {
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .review-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .avatar {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ── SCORE BOX ── */
+    .score-box {
+      width: 48px; height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 900;
+      background: rgba(34,197,94,0.15);
+      color: var(--green);
+      border: 2px solid rgba(34,197,94,0.35);
+    }
+
+    .score-box.good {
+      background: rgba(245,158,11,0.15);
+      color: var(--accent3);
+      border-color: rgba(245,158,11,0.35);
+    }
+
+    .score-box.avg {
+      background: rgba(249,115,22,0.15);
+      color: #f97316;
+      border-color: rgba(249,115,22,0.35);
+    }
+
+    /* ── TOP GAMES LIST ── */
+    .top-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .top-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+
+    .top-item:hover { border-color: rgba(124,58,237,0.4); }
+
+    .top-num {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--border);
+      min-width: 2rem;
+      text-align: center;
+    }
+
+    .top-item:nth-child(1) .top-num { color: #fbbf24; }
+    .top-item:nth-child(2) .top-num { color: #94a3b8; }
+    .top-item:nth-child(3) .top-num { color: #b45309; }
+
+    .top-thumb {
+      width: 56px; height: 56px;
+      border-radius: 8px;
+      background-size: cover;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    .top-info { flex: 1; min-width: 0; }
+
+    .top-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    /* ── SIDEBAR LAYOUT ── */
+    .content-sidebar {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .content-sidebar { grid-template-columns: 1fr; }
+    }
+
+    /* ── CATEGORIES ── */
+    .categories {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    .cat-btn {
+      padding: 0.45rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.2s;
+    }
+
+    .cat-btn:hover,
+    .cat-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ── NEWSLETTER ── */
+    .newsletter {
+      background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(6,182,212,0.1));
+      border: 1px solid rgba(124,58,237,0.25);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      text-align: center;
+      margin: 2rem 0;
+    }
+
+    .newsletter h2 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+    }
+
+    .newsletter p {
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .nl-form {
+      display: flex;
+      gap: 0.75rem;
+      max-width: 480px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .nl-input {
+      flex: 1;
+      min-width: 240px;
+      padding: 0.75rem 1rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .nl-input:focus { border-color: var(--accent); }
+    .nl-input::placeholder { color: var(--muted); }
+
+    /* ── AI BADGE ── */
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
+      border: 1px solid rgba(124,58,237,0.3);
+      padding: 0.3rem 0.75rem;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #a78bfa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── STARS ── */
+    .stars {
+      display: flex;
+      gap: 2px;
+      color: var(--accent3);
+      font-size: 0.8rem;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* ── TICKER ── */
+    .ticker {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      padding: 0.6rem 0;
+    }
+
+    .ticker-inner {
+      display: flex;
+      gap: 3rem;
+      animation: ticker 30s linear infinite;
+      white-space: nowrap;
+    }
+
+    @keyframes ticker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .ticker-item .tag { color: var(--accent2); font-weight: 700; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      padding: 3rem 1.5rem 2rem;
+    }
+
+    .footer-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1fr 1fr;
+      gap: 3rem;
+    }
+
+    @media (max-width: 768px) {
+      .footer-inner { grid-template-columns: 1fr 1fr; }
+      nav .nav-links { display: none; }
+    }
+
+    .footer-brand p {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-top: 0.75rem;
+      line-height: 1.7;
+    }
+
+    .footer-col h4 {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .footer-col a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+
+    .footer-col a:hover { color: var(--accent2); }
+
+    .footer-bottom {
+      max-width: 1280px;
+      margin: 2rem auto 0;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    /* ── COVER IMAGES (gradients as placeholder art) ── */
+    .cover-cyberpunk {
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e),
+        repeating-linear-gradient(45deg, rgba(124,58,237,0.05) 0, rgba(124,58,237,0.05) 1px, transparent 0, transparent 50%);
+    }
+
+    .cover-elden {
+      background: linear-gradient(135deg, #1a0a00, #4a1500, #8b3a00);
+    }
+
+    .cover-stalker {
+      background: linear-gradient(135deg, #0d1b0e, #1a3320, #0a2210);
+    }
+
+    .cover-ff7 {
+      background: linear-gradient(135deg, #0d0d2b, #1a1a4e, #0a3a6e);
+    }
+
+    .cover-wukong {
+      background: linear-gradient(135deg, #2d1b00, #6b3a00, #c17200);
+    }
+
+    .cover-helldivers {
+      background: linear-gradient(135deg, #0a0a1a, #1a1a3e, #c0a000);
+    }
+
+    .cover-balatro {
+      background: linear-gradient(135deg, #1a0a2e, #2d1454, #6b21a8);
+    }
+
+    .cover-mh {
+      background: linear-gradient(135deg, #001a0a, #003316, #005c2a);
+    }
+
+    .cover-tekken {
+      background: linear-gradient(135deg, #0a0a1a, #1a1040, #4a0a8a);
+    }
+
+    .cover-rebirth {
+      background: linear-gradient(135deg, #0a0a1a, #0a1a3a, #1a0a4a);
+    }
+
+    /* Decorative game art overlay text */
+    .cover-art {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5rem;
+      opacity: 0.07;
+      user-select: none;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVIGATION -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="gem">🎮</div>
+    AI<span style="color:var(--accent2)">Gaming</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#reviews">Обзоры</a></li>
+    <li><a href="#top">Топ игр</a></li>
+    <li><a href="#news">Новости</a></li>
+    <li><a href="#guides">Гайды</a></li>
+    <li><a href="#about">О нас</a></li>
+  </ul>
+  <a href="#newsletter" class="nav-cta">Подписаться</a>
+</nav>
+
+<!-- TICKER -->
+<div class="ticker" style="margin-top:64px;">
+  <div class="ticker-inner">
+    <span class="ticker-item"><span class="tag">NEW</span> Обзор Monster Hunter Wilds — 9.4/10</span>
+    <span class="ticker-item"><span class="tag">HOT</span> Elden Ring DLC: Shadow of the Erdtree — 9.8/10</span>
+    <span class="ticker-item"><span class="tag">TOP</span> Black Myth: Wukong завоевал 5 наград GOTY</span>
+    <span class="ticker-item"><span class="tag">NEW</span> Обзор STALKER 2 — 8.7/10</span>
+    <span class="ticker-item"><span class="tag">GUIDE</span> Лучшие билды в Path of Exile 2</span>
+    <span class="ticker-item"><span class="tag">NEWS</span> GTA VI выходит в 2025 году</span>
+    <!-- дубль для непрерывности -->
+    <span class="ticker-item"><span class="tag">NEW</span> Обзор Monster Hunter Wilds — 9.4/10</span>
+    <span class="ticker-item"><span class="tag">HOT</span> Elden Ring DLC: Shadow of the Erdtree — 9.8/10</span>
+    <span class="ticker-item"><span class="tag">TOP</span> Black Myth: Wukong завоевал 5 наград GOTY</span>
+    <span class="ticker-item"><span class="tag">NEW</span> Обзор STALKER 2 — 8.7/10</span>
+    <span class="ticker-item"><span class="tag">GUIDE</span> Лучшие билды в Path of Exile 2</span>
+    <span class="ticker-item"><span class="tag">NEWS</span> GTA VI выходит в 2025 году</span>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <div class="dot"></div>
+    AI-powered обзоры
+  </div>
+  <h1>Игровые обзоры нового поколения</h1>
+  <p>Глубокие аналитические обзоры, топ-листы и гайды. Объективно. Честно. С помощью ИИ.</p>
+  <div class="hero-buttons">
+    <a href="#reviews" class="btn-primary">Читать обзоры</a>
+    <a href="#top" class="btn-secondary">Топ 2025</a>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="num">1 200+</div>
+      <div class="label">Обзоров</div>
+    </div>
+    <div class="stat">
+      <div class="num">98K</div>
+      <div class="label">Читателей</div>
+    </div>
+    <div class="stat">
+      <div class="num">4.9★</div>
+      <div class="label">Рейтинг</div>
+    </div>
+    <div class="stat">
+      <div class="num">15 лет</div>
+      <div class="label">Опыта</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURED -->
+<section class="section" id="reviews">
+  <div class="section-header">
+    <h2 class="section-title">Главные <span>обзоры</span></h2>
+    <a href="#" class="see-all">Все обзоры →</a>
+  </div>
+
+  <div class="featured-grid">
+    <!-- Big card -->
+    <div class="card-featured">
+      <div class="cover cover-elden"></div>
+      <div class="cover-art">ER</div>
+      <div class="overlay"></div>
+      <div class="content">
+        <div class="genre-tag rpg">RPG / Souls-like</div>
+        <div class="card-title">Elden Ring: Shadow of the Erdtree</div>
+        <div class="card-meta">
+          <span class="score great">★ 9.8</span>
+          <span>·</span>
+          <span>15 июня 2024</span>
+          <span>·</span>
+          <span>FromSoftware</span>
+        </div>
+        <p style="font-size:0.875rem;color:#94a3b8;margin-top:0.5rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+          Лучшее DLC в истории игровой индустрии. Огромный новый мир, невероятные боссы и десятки часов контента.
+        </p>
+      </div>
+    </div>
+
+    <!-- Small stack -->
+    <div class="card-small-stack">
+      <div class="card-small">
+        <div class="cover cover-wukong"></div>
+        <div class="cover-art">WK</div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="genre-tag action">Action</div>
+          <div class="card-title">Black Myth: Wukong</div>
+          <div class="card-meta">
+            <span class="score great">★ 9.3</span>
+            <span>·</span>
+            <span>20 авг 2024</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-small">
+        <div class="cover cover-stalker"></div>
+        <div class="cover-art">S2</div>
+        <div class="overlay"></div>
+        <div class="content">
+          <div class="genre-tag shooter">FPS / Open World</div>
+          <div class="card-title">STALKER 2: Heart of Chornobyl</div>
+          <div class="card-meta">
+            <span class="score good">★ 8.7</span>
+            <span>·</span>
+            <span>20 нояб 2024</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REVIEWS GRID + SIDEBAR -->
+<div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:5rem 1.5rem;">
+  <div style="max-width:1280px;margin:0 auto;">
+    <div class="content-sidebar">
+
+      <!-- MAIN CONTENT -->
+      <div>
+        <div class="section-header">
+          <h2 class="section-title">Последние <span>обзоры</span></h2>
+        </div>
+
+        <div class="categories">
+          <button class="cat-btn active">Все</button>
+          <button class="cat-btn">Action</button>
+          <button class="cat-btn">RPG</button>
+          <button class="cat-btn">Стратегии</button>
+          <button class="cat-btn">Indie</button>
+          <button class="cat-btn">Horror</button>
+          <button class="cat-btn">Шутеры</button>
+        </div>
+
+        <div class="reviews-grid">
+
+          <!-- Review 1 -->
+          <div class="review-card">
+            <div class="thumb cover-mh"></div>
+            <div class="body">
+              <div class="genre-tag action">Action RPG</div>
+              <div class="game-name">Monster Hunter Wilds</div>
+              <p class="excerpt">Capcom снова превзошла себя. Wilds предлагает самый живой и дышащий мир в серии. Охота ощущается как настоящее приключение, а новые экосистемы поражают воображение.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">МК</div>
+                  <span>Михаил К.</span>
+                </div>
+                <div class="score-box">9.4</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review 2 -->
+          <div class="review-card">
+            <div class="thumb cover-ff7"></div>
+            <div class="body">
+              <div class="genre-tag rpg">JRPG</div>
+              <div class="game-name">Final Fantasy VII Rebirth</div>
+              <p class="excerpt">Второй акт трилогии превратился в грандиозное путешествие. Открытый мир полон деталей, а история смело переосмысляет классику, не теряя её сути.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">АС</div>
+                  <span>Анна С.</span>
+                </div>
+                <div class="score-box">9.2</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review 3 -->
+          <div class="review-card">
+            <div class="thumb cover-helldivers"></div>
+            <div class="body">
+              <div class="genre-tag shooter">Co-op Shooter</div>
+              <div class="game-name">Helldivers 2</div>
+              <p class="excerpt">Феномен 2024 года. Совместная борьба за демократию никогда не была такой весёлой. Каждая миссия — это непредсказуемый хаос, каждая смерть — история.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">ДП</div>
+                  <span>Дима П.</span>
+                </div>
+                <div class="score-box">9.0</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review 4 -->
+          <div class="review-card">
+            <div class="thumb cover-balatro"></div>
+            <div class="body">
+              <div class="genre-tag indie">Indie / Roguelike</div>
+              <div class="game-name">Balatro</div>
+              <p class="excerpt">Карточная игра, которая сломала мозг миллионам игроков. Простые правила скрывают бездонную глубину. GOTY-претендент, про который говорят все.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">ОЛ</div>
+                  <span>Ольга Л.</span>
+                </div>
+                <div class="score-box">9.5</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review 5 -->
+          <div class="review-card">
+            <div class="thumb cover-tekken"></div>
+            <div class="body">
+              <div class="genre-tag action">Файтинг</div>
+              <div class="game-name">Tekken 8</div>
+              <p class="excerpt">Bandai Namco сделала лучший файтинг серии. Новая боевая система Heat идеально сочетает доступность для новичков с глубиной для ветеранов жанра.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">ВН</div>
+                  <span>Василий Н.</span>
+                </div>
+                <div class="score-box good">8.8</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review 6 -->
+          <div class="review-card">
+            <div class="thumb cover-cyberpunk"></div>
+            <div class="body">
+              <div class="genre-tag">Action RPG</div>
+              <div class="game-name">Cyberpunk 2077: Phantom Liberty</div>
+              <p class="excerpt">CD Projekt RED реабилитировалась с лихвой. Phantom Liberty — это шпионский триллер уровня HBO в формате видеоигры. Финальный акт поражает.</p>
+              <div class="review-footer">
+                <div class="author">
+                  <div class="avatar">ИФ</div>
+                  <span>Иван Ф.</span>
+                </div>
+                <div class="score-box">9.1</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="text-align:center;margin-top:2rem;">
+          <button class="btn-secondary">Загрузить ещё обзоры</button>
+        </div>
+      </div>
+
+      <!-- SIDEBAR -->
+      <div>
+        <div id="top">
+          <h3 class="section-title" style="font-size:1.25rem;margin-bottom:1.5rem;">Топ <span>2024–2025</span></h3>
+          <div class="top-list">
+            <div class="top-item">
+              <div class="top-num">1</div>
+              <div class="top-thumb cover-balatro"></div>
+              <div class="top-info">
+                <div class="top-title">Balatro</div>
+                <div class="top-sub">Indie · 9.5 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">2</div>
+              <div class="top-thumb cover-elden"></div>
+              <div class="top-info">
+                <div class="top-title">Elden Ring: SotE</div>
+                <div class="top-sub">RPG · 9.8 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">3</div>
+              <div class="top-thumb cover-mh"></div>
+              <div class="top-info">
+                <div class="top-title">Monster Hunter Wilds</div>
+                <div class="top-sub">Action RPG · 9.4 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">4</div>
+              <div class="top-thumb cover-wukong"></div>
+              <div class="top-info">
+                <div class="top-title">Black Myth: Wukong</div>
+                <div class="top-sub">Action · 9.3 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">5</div>
+              <div class="top-thumb cover-ff7"></div>
+              <div class="top-info">
+                <div class="top-title">FF VII Rebirth</div>
+                <div class="top-sub">JRPG · 9.2 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">6</div>
+              <div class="top-thumb cover-helldivers"></div>
+              <div class="top-info">
+                <div class="top-title">Helldivers 2</div>
+                <div class="top-sub">Co-op · 9.0 / 10</div>
+              </div>
+            </div>
+            <div class="top-item">
+              <div class="top-num">7</div>
+              <div class="top-thumb cover-stalker"></div>
+              <div class="top-info">
+                <div class="top-title">STALKER 2</div>
+                <div class="top-sub">FPS · 8.7 / 10</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:2.5rem;">
+          <h3 class="section-title" style="font-size:1.25rem;margin-bottom:1.25rem;">Жанры</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+            <span class="genre-tag action" style="cursor:pointer">Action</span>
+            <span class="genre-tag rpg" style="cursor:pointer">RPG</span>
+            <span class="genre-tag strategy" style="cursor:pointer">Стратегии</span>
+            <span class="genre-tag horror" style="cursor:pointer">Horror</span>
+            <span class="genre-tag indie" style="cursor:pointer">Indie</span>
+            <span class="genre-tag shooter" style="cursor:pointer">Шутеры</span>
+            <span class="genre-tag" style="cursor:pointer">Файтинги</span>
+            <span class="genre-tag strategy" style="cursor:pointer">Симуляторы</span>
+            <span class="genre-tag rpg" style="cursor:pointer">MMORPG</span>
+          </div>
+        </div>
+
+        <div style="margin-top:2.5rem;padding:1.5rem;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+          <div class="ai-badge" style="margin-bottom:1rem;">✦ AI Рекомендация</div>
+          <h4 style="font-size:1rem;font-weight:700;margin-bottom:0.5rem;">Balatro</h4>
+          <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;">Наш ИИ проанализировал 50 000 отзывов и выбрал лучшую игру месяца. Оценка читателей: 4.9/5</p>
+          <div class="stars">★★★★★</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NEWSLETTER -->
+<div class="section" id="newsletter">
+  <div class="newsletter">
+    <div class="ai-badge" style="margin-bottom:1rem;">✦ Еженедельный дайджест</div>
+    <h2>Не пропускай ни одного обзора</h2>
+    <p>Каждую пятницу — топ обзоры, гайды и горячие новости прямо в почту.</p>
+    <div class="nl-form">
+      <input type="email" class="nl-input" placeholder="твой@email.ru" />
+      <button class="btn-primary" style="padding:0.75rem 1.5rem;">Подписаться</button>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:1rem;">Без спама. Отписка в один клик.</p>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="nav-logo" style="margin-bottom:0.75rem;">
+        <div class="gem">🎮</div>
+        AI<span style="color:var(--accent2)">Gaming</span>
+      </div>
+      <p>Независимый игровой медиа-проект. Честные обзоры, аналитика и гайды для геймеров с использованием технологий искусственного интеллекта.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Контент</h4>
+      <ul>
+        <li><a href="#">Обзоры</a></li>
+        <li><a href="#">Превью</a></li>
+        <li><a href="#">Гайды</a></li>
+        <li><a href="#">Топ-листы</a></li>
+        <li><a href="#">Новости</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Платформы</h4>
+      <ul>
+        <li><a href="#">PC</a></li>
+        <li><a href="#">PlayStation</a></li>
+        <li><a href="#">Xbox</a></li>
+        <li><a href="#">Nintendo</a></li>
+        <li><a href="#">Mobile</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>О нас</h4>
+      <ul>
+        <li><a href="#">Команда</a></li>
+        <li><a href="#">Методология</a></li>
+        <li><a href="#">Реклама</a></li>
+        <li><a href="#">Контакты</a></li>
+        <li><a href="#">Discord</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 AIGaming. Все права защищены.</span>
+    <span>Сделано с ❤️ и ИИ</span>
+  </div>
+</footer>
+
+<script>
+  // Category filter buttons
+  document.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -16,6 +16,10 @@ export abstract class BaseProvider implements ProviderInfo {
   getApiKeyLink?: string;
   labelForGetApiKey?: string;
   icon?: string;
+  supportsApiKey?: boolean;
+  supportsAccountAuth?: boolean;
+  requiresAuthForModels?: boolean;
+  unavailableMessage?: string;
 
   getProviderBaseUrlAndKey(options: {
     apiKeys?: Record<string, string>;

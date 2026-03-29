@@ -12,7 +12,7 @@ import { classNames } from '~/utils/classNames';
 import { PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
-import { APIKeyManager, getApiKeysFromCookies } from './APIKeyManager';
+import { getApiKeysFromCookies } from './APIKeyManager';
 import Cookies from 'js-cookie';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
@@ -32,7 +32,7 @@ import StarterTemplates from './StarterTemplates';
 import type { ActionAlert, SupabaseAlert, DeployAlert } from '~/types/actions';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
-import type { ModelInfo } from '~/lib/modules/llm/types';
+import type { ModelInfo, ReasoningEffort } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
@@ -43,6 +43,10 @@ import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { useStore } from '@nanostores/react';
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
+import { useSettings } from '~/lib/hooks/useSettings';
+import { getProviderRuntimeState } from '~/utils/providerRuntime';
+import Popover from '~/components/ui/Popover';
+import { ProviderSettingsPopover } from './ProviderSettingsPopover';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -82,6 +86,29 @@ interface BaseChatProps {
   clearDeployAlert?: () => void;
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
+}
+
+interface CodexAuthStatus {
+  available: boolean;
+  authenticated: boolean;
+  loginMethod?: 'chatgpt' | 'api_key' | 'unknown';
+  accountType?: 'chatgpt' | 'apiKey' | 'unknown';
+  requiresOpenaiAuth?: boolean;
+  email?: string;
+  planType?: string;
+  cliPath?: string;
+  error?: string;
+}
+
+interface CodexModelInfo {
+  id: string;
+  model: string;
+  displayName: string;
+  description: string;
+  isDefault: boolean;
+  hidden: boolean;
+  supportedReasoningEfforts?: ReasoningEffort[];
+  defaultReasoningEffort?: ReasoningEffort;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -124,9 +151,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     ref,
   ) => {
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const { providers, updateProviderSettings } = useSettings();
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
-    const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
+    const [providerEnvKeyStatus, setProviderEnvKeyStatus] = useState<Record<string, boolean>>({});
+    const [openAIAccountStatus, setOpenAIAccountStatus] = useState<CodexAuthStatus>({
+      available: false,
+      authenticated: false,
+    });
+    const [anthropicAccountStatus, setAnthropicAccountStatus] = useState<{
+      available: boolean;
+      authenticated: boolean;
+      error?: string;
+    }>({
+      available: false,
+      authenticated: false,
+    });
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
@@ -191,56 +231,428 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
-        let parsedApiKeys: Record<string, string> | undefined = {};
-
         try {
-          parsedApiKeys = getApiKeysFromCookies();
-          setApiKeys(parsedApiKeys);
+          setApiKeys(getApiKeysFromCookies());
         } catch (error) {
           console.error('Error loading API keys from cookies:', error);
           Cookies.remove('apiKeys');
         }
-
-        setIsModelLoading('all');
-        fetch('/api/models')
-          .then((response) => response.json())
-          .then((data) => {
-            const typedData = data as { modelList: ModelInfo[] };
-            setModelList(typedData.modelList);
-          })
-          .catch((error) => {
-            console.error('Error fetching model list:', error);
-          })
-          .finally(() => {
-            setIsModelLoading(undefined);
-          });
       }
-    }, [providerList, provider]);
+    }, []);
+
+    const currentProviderSettings = provider ? providers[provider.name]?.settings : undefined;
+    const currentProviderAuthMode = currentProviderSettings?.authMode || 'apiKey';
+    const currentProviderReasoningEffort = currentProviderSettings?.reasoningEffort;
+    const currentProviderCustomModelId = currentProviderSettings?.customModelId || '';
+    const supportsProviderAccountAuth = provider?.supportsAccountAuth === true;
+    const isProviderAccountMode = supportsProviderAccountAuth && currentProviderAuthMode === 'account';
+    const isOpenAIAccountMode = isProviderAccountMode && provider?.name === 'OpenAI';
+    const isAnthropicAccountMode = isProviderAccountMode && provider?.name === 'Anthropic';
+    const currentProviderModels = modelList.filter((entry) => entry.provider === provider?.name);
+    const openAIAccountBridgeAvailable =
+      typeof window !== 'undefined' && Boolean(window.codexAuth?.getStatus && window.codexAuth?.startLogin);
+    const anthropicAccountBridgeAvailable =
+      typeof window !== 'undefined' && Boolean(window.anthropicAuth?.getStatus && window.anthropicAuth?.startLogin);
+    const providerAccountBridgeAvailable =
+      provider?.name === 'OpenAI'
+        ? openAIAccountBridgeAvailable
+        : provider?.name === 'Anthropic'
+          ? anthropicAccountBridgeAvailable
+          : false;
+    const providerAccountConnected =
+      provider?.name === 'OpenAI'
+        ? openAIAccountStatus.authenticated
+        : provider?.name === 'Anthropic'
+          ? anthropicAccountStatus.authenticated
+          : false;
+
+    const refreshProviderEnvKeyStatus = async (providerName: string) => {
+      try {
+        const response = await fetch(`/api/check-env-key?provider=${encodeURIComponent(providerName)}`);
+        const data = (await response.json()) as { isSet: boolean };
+        setProviderEnvKeyStatus((prev) => ({ ...prev, [providerName]: data.isSet }));
+
+        return data.isSet;
+      } catch (error) {
+        console.error('Failed to check provider auth status:', error);
+        setProviderEnvKeyStatus((prev) => ({ ...prev, [providerName]: false }));
+
+        return false;
+      }
+    };
+
+    const refreshOpenAIAccountAuth = async () => {
+      if (!window.codexAuth?.getStatus) {
+        const unavailableStatus = { available: false, authenticated: false };
+        setOpenAIAccountStatus(unavailableStatus);
+
+        return unavailableStatus;
+      }
+
+      try {
+        const status = (await window.codexAuth.getStatus()) as CodexAuthStatus;
+        setOpenAIAccountStatus(status);
+
+        return status;
+      } catch (error) {
+        console.error('Failed to get OpenAI account auth status:', error);
+
+        const errorStatus = { available: true, authenticated: false, error: 'status_check_failed' } as CodexAuthStatus;
+        setOpenAIAccountStatus(errorStatus);
+
+        return errorStatus;
+      }
+    };
+
+    const refreshAnthropicAccountAuth = async () => {
+      if (!window.anthropicAuth?.getStatus) {
+        const unavailableStatus = { available: false, authenticated: false };
+        setAnthropicAccountStatus(unavailableStatus);
+
+        return unavailableStatus;
+      }
+
+      try {
+        const status = (await window.anthropicAuth.getStatus()) as {
+          available: boolean;
+          authenticated: boolean;
+          error?: string;
+        };
+        setAnthropicAccountStatus(status);
+
+        return status;
+      } catch (error) {
+        console.error('Failed to get Anthropic account auth status:', error);
+
+        const errorStatus = { available: true, authenticated: false, error: 'status_check_failed' };
+        setAnthropicAccountStatus(errorStatus);
+
+        return errorStatus;
+      }
+    };
+
+    const handleOpenAIAccountLogin = async () => {
+      if (!window.codexAuth?.startLogin) {
+        toast.error('Desktop OpenAI authentication is unavailable in this mode.');
+        return;
+      }
+
+      const result = (await window.codexAuth.startLogin()) as {
+        launched?: boolean;
+        authUrl?: string;
+        loginId?: string;
+        error?: string;
+        alreadyAuthenticated?: boolean;
+      };
+
+      if (!result?.launched) {
+        toast.error(result?.error || 'Не удалось открыть окно аутентификации OpenAI.');
+        return;
+      }
+
+      if (result.alreadyAuthenticated) {
+        toast.success('OpenAI аккаунт уже подключен.');
+      } else {
+        toast.info('Окно аутентификации OpenAI открыто. Завершите вход и вернитесь в приложение.');
+      }
+
+      await refreshOpenAIAccountAuth();
+    };
+
+    const handleAnthropicAccountLogin = async () => {
+      if (!window.anthropicAuth?.startLogin) {
+        toast.error('Desktop Anthropic authentication is unavailable in this mode.');
+        return;
+      }
+
+      const result = (await window.anthropicAuth.startLogin()) as {
+        launched?: boolean;
+        error?: string;
+        alreadyAuthenticated?: boolean;
+      };
+
+      if (!result?.launched) {
+        toast.error(result?.error || 'Не удалось открыть окно аутентификации Anthropic.');
+        return;
+      }
+
+      if (result.alreadyAuthenticated) {
+        toast.success('Anthropic аккаунт уже подключен.');
+      } else {
+        toast.info('Окно аутентификации Anthropic открыто. Завершите вход и вернитесь в приложение.');
+      }
+
+      await refreshAnthropicAccountAuth();
+    };
+
+    const refreshProviderModels = async (
+      providerName: string,
+      providerSettingsOverride?: {
+        authMode?: 'apiKey' | 'account';
+        reasoningEffort?: ReasoningEffort;
+        customModelId?: string;
+      },
+    ) => {
+      setIsModelLoading(providerName);
+
+      try {
+        const providerSettingsForModels =
+          providerSettingsOverride ||
+          (providerName === provider?.name ? currentProviderSettings : providers[providerName]?.settings);
+        const isAccountMode = providerSettingsForModels?.authMode === 'account';
+        const isOpenAIAccountModeForProvider = providerName === 'OpenAI' && isAccountMode;
+        const isAnthropicAccountModeForProvider = providerName === 'Anthropic' && isAccountMode;
+
+        if (isOpenAIAccountModeForProvider) {
+          if (!window.codexAuth?.listModels) {
+            setModelList((prevModels) => prevModels.filter((entry) => entry.provider !== providerName));
+            return [];
+          }
+
+          const codexModels = (await window.codexAuth.listModels({ includeHidden: false })) as CodexModelInfo[];
+          const providerModels: ModelInfo[] = codexModels.map((model) => ({
+            name: model.model || model.id,
+            label: model.displayName || model.model || model.id,
+            provider: 'OpenAI',
+            maxTokenAllowed: 128000,
+            source: 'dynamic',
+            supportedReasoningEfforts: model.supportedReasoningEfforts,
+            defaultReasoningEffort: model.defaultReasoningEffort,
+          }));
+
+          setModelList((prevModels) => {
+            const otherModels = prevModels.filter((entry) => entry.provider !== providerName);
+            return [...otherModels, ...providerModels];
+          });
+
+          return providerModels;
+        }
+
+        if (isAnthropicAccountModeForProvider) {
+          if (!window.anthropicAuth?.listModels) {
+            setModelList((prevModels) => prevModels.filter((entry) => entry.provider !== providerName));
+            return [];
+          }
+
+          const claudeModels = await window.anthropicAuth.listModels();
+          const anthropicEffortOptions: ReasoningEffort[] = ['low', 'medium', 'high', 'max'];
+          let providerModels: ModelInfo[] = claudeModels.map((model) => ({
+            name: model.model || model.id,
+            label: model.displayName || model.model || model.id,
+            provider: 'Anthropic',
+            maxTokenAllowed: 200000,
+            source: 'dynamic',
+            supportedReasoningEfforts: model.supportedReasoningEfforts || anthropicEffortOptions,
+            defaultReasoningEffort: model.defaultReasoningEffort || 'medium',
+          }));
+          const customModelId = providerSettingsForModels?.customModelId?.trim();
+
+          if (customModelId && !providerModels.some((entry) => entry.name === customModelId)) {
+            providerModels = [
+              ...providerModels,
+              {
+                name: customModelId,
+                label: customModelId,
+                provider: 'Anthropic',
+                maxTokenAllowed: 200000,
+                source: 'dynamic',
+                supportedReasoningEfforts: anthropicEffortOptions,
+                defaultReasoningEffort: 'medium',
+              },
+            ];
+          }
+
+          setModelList((prevModels) => {
+            const otherModels = prevModels.filter((entry) => entry.provider !== providerName);
+            return [...otherModels, ...providerModels];
+          });
+
+          return providerModels;
+        }
+
+        const response = await fetch(`/api/models/${encodeURIComponent(providerName)}`);
+        const data = (await response.json()) as { modelList: ModelInfo[] };
+        const providerModels = data.modelList || [];
+        setModelList((prevModels) => {
+          const otherModels = prevModels.filter((entry) => entry.provider !== providerName);
+          return [...otherModels, ...providerModels];
+        });
+
+        return providerModels;
+      } catch (error) {
+        console.error('Error loading dynamic models for:', providerName, error);
+        setModelList((prevModels) => prevModels.filter((entry) => entry.provider !== providerName));
+
+        return [];
+      } finally {
+        setIsModelLoading(undefined);
+      }
+    };
+
+    useEffect(() => {
+      if (!provider?.name || typeof window === 'undefined') {
+        return;
+      }
+
+      void refreshProviderEnvKeyStatus(provider.name);
+
+      if (provider.name === 'OpenAI') {
+        void refreshOpenAIAccountAuth();
+      }
+
+      if (provider.name === 'Anthropic') {
+        void refreshAnthropicAccountAuth();
+      }
+
+      void refreshProviderModels(provider.name, currentProviderSettings);
+    }, [provider?.name, currentProviderAuthMode, currentProviderCustomModelId]);
+
+    useEffect(() => {
+      if (!isProviderAccountMode || !providerAccountBridgeAvailable || providerAccountConnected) {
+        return undefined;
+      }
+
+      const intervalId = window.setInterval(() => {
+        if (provider?.name === 'OpenAI') {
+          void refreshOpenAIAccountAuth();
+        } else if (provider?.name === 'Anthropic') {
+          void refreshAnthropicAccountAuth();
+        }
+      }, 1500);
+
+      return () => {
+        window.clearInterval(intervalId);
+      };
+    }, [isProviderAccountMode, providerAccountBridgeAvailable, providerAccountConnected, provider?.name]);
+
+    useEffect(() => {
+      if (isOpenAIAccountMode && window.codexAuth?.onEvent) {
+        const unsubscribe = window.codexAuth.onEvent((event) => {
+          if (event.type !== 'account/login/completed') {
+            return;
+          }
+
+          void refreshOpenAIAccountAuth();
+
+          if (provider?.name === 'OpenAI') {
+            void refreshProviderModels('OpenAI');
+          }
+        });
+
+        return () => {
+          unsubscribe();
+        };
+      }
+
+      if (isAnthropicAccountMode && window.anthropicAuth?.onEvent) {
+        const unsubscribe = window.anthropicAuth.onEvent((event) => {
+          if (event.type !== 'account/login/completed') {
+            return;
+          }
+
+          void refreshAnthropicAccountAuth();
+
+          if (provider?.name === 'Anthropic') {
+            void refreshProviderModels('Anthropic');
+          }
+        });
+
+        return () => {
+          unsubscribe();
+        };
+      }
+
+      return undefined;
+    }, [isOpenAIAccountMode, isAnthropicAccountMode, provider?.name]);
 
     const onApiKeysChange = async (providerName: string, apiKey: string) => {
       const newApiKeys = { ...apiKeys, [providerName]: apiKey };
       setApiKeys(newApiKeys);
       Cookies.set('apiKeys', JSON.stringify(newApiKeys));
+      await refreshProviderEnvKeyStatus(providerName);
+      await refreshProviderModels(providerName);
+    };
 
-      setIsModelLoading(providerName);
-
-      let providerModels: ModelInfo[] = [];
-
-      try {
-        const response = await fetch(`/api/models/${encodeURIComponent(providerName)}`);
-        const data = await response.json();
-        providerModels = (data as { modelList: ModelInfo[] }).modelList;
-      } catch (error) {
-        console.error('Error loading dynamic models for:', providerName, error);
+    useEffect(() => {
+      if (!provider?.name || !setModel) {
+        return;
       }
 
-      // Only update models for the specific provider
-      setModelList((prevModels) => {
-        const otherModels = prevModels.filter((model) => model.provider !== providerName);
-        return [...otherModels, ...providerModels];
-      });
-      setIsModelLoading(undefined);
-    };
+      if (!currentProviderModels.length) {
+        if (model) {
+          setModel('');
+          Cookies.remove('selectedModel');
+        }
+
+        return;
+      }
+
+      if (!model || !currentProviderModels.some((entry) => entry.name === model)) {
+        setModel(currentProviderModels[0].name);
+      }
+    }, [provider?.name, currentProviderModels, model, setModel]);
+
+    const selectedProviderModel =
+      currentProviderModels.find((entry) => entry.name === model) || currentProviderModels[0];
+    const selectedModelEffortOptions = selectedProviderModel?.supportedReasoningEfforts || [];
+
+    useEffect(() => {
+      if (!provider?.name) {
+        return;
+      }
+
+      const nextSettings = { ...currentProviderSettings };
+
+      if (!isProviderAccountMode || selectedModelEffortOptions.length === 0) {
+        if (nextSettings.reasoningEffort) {
+          nextSettings.reasoningEffort = undefined;
+          updateProviderSettings(provider.name, nextSettings);
+        }
+
+        return;
+      }
+
+      const hasConfiguredEffort =
+        nextSettings.reasoningEffort && selectedModelEffortOptions.includes(nextSettings.reasoningEffort);
+
+      if (hasConfiguredEffort) {
+        return;
+      }
+
+      nextSettings.reasoningEffort = selectedProviderModel?.defaultReasoningEffort || selectedModelEffortOptions[0];
+      updateProviderSettings(provider.name, nextSettings);
+    }, [
+      provider?.name,
+      isProviderAccountMode,
+      currentProviderAuthMode,
+      model,
+      selectedProviderModel?.name,
+      selectedProviderModel?.defaultReasoningEffort,
+      selectedModelEffortOptions.join(','),
+      currentProviderReasoningEffort,
+    ]);
+
+    const runtimeState = provider
+      ? getProviderRuntimeState({
+          providerName: provider.name,
+          providerSettings: currentProviderSettings,
+          providerSupportsAccountAuth: provider.supportsAccountAuth,
+          apiKeyConfigured: Boolean(apiKeys[provider.name] || providerEnvKeyStatus[provider.name]),
+          accountConnected: providerAccountConnected,
+          accountAuthAvailable: providerAccountBridgeAvailable,
+          isLoading: isModelLoading === provider.name,
+          hasModels: currentProviderModels.length > 0,
+          modelsSource: currentProviderModels[0]?.source || 'unavailable',
+        })
+      : undefined;
+
+    const providerName = provider?.name;
+    const isCloudOrOpenAILikeProvider = providerName
+      ? !LOCAL_PROVIDERS.includes(providerName) || providerName === 'OpenAILike'
+      : false;
+    const shouldShowProviderAuthControls =
+      Boolean(providerName) && (providerList || []).length > 0 && isCloudOrOpenAILikeProvider;
+    const shouldShowSettingsPopover = shouldShowProviderAuthControls;
 
     const startListening = () => {
       if (recognition) {
@@ -257,6 +669,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     };
 
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
+      if (!provider?.name || !model || runtimeState?.modelsState !== 'ready') {
+        toast.error(runtimeState?.warningMessage || 'Модели недоступны. Подключите API или войдите в аккаунт.');
+        return;
+      }
+
       if (sendMessage) {
         sendMessage(event, messageInput);
 
@@ -446,7 +863,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <div>
                     <ClientOnly>
                       {() => (
-                        <div className={isModelSettingsCollapsed ? 'hidden' : ''}>
+                        <div>
                           <ModelSelector
                             key={provider?.name + ':' + modelList.length}
                             model={model}
@@ -455,20 +872,100 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             provider={provider}
                             setProvider={setProvider}
                             providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
-                            apiKeys={apiKeys}
                             modelLoading={isModelLoading}
+                            runtimeState={runtimeState}
+                            settingsTrigger={
+                              provider && shouldShowSettingsPopover ? (
+                                <Popover
+                                  side="bottom"
+                                  align="end"
+                                  sideOffset={6}
+                                  alignOffset={0}
+                                  collisionPadding={12}
+                                  contentClassName="p-0"
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className="flex h-[52px] w-[52px] items-center justify-center rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textSecondary transition-colors hover:text-bolt-elements-textPrimary"
+                                      title="Model settings"
+                                      aria-label="Open model settings"
+                                    >
+                                      <div className="i-ph:sliders-horizontal h-4 w-4" />
+                                    </button>
+                                  }
+                                >
+                                  <ProviderSettingsPopover
+                                    provider={provider}
+                                    apiKey={apiKeys[provider.name] || ''}
+                                    authMode={currentProviderAuthMode}
+                                    runtimeState={runtimeState}
+                                    accountAuthAvailable={providerAccountBridgeAvailable}
+                                    selectedModel={selectedProviderModel}
+                                    reasoningEffort={currentProviderReasoningEffort}
+                                    customModelId={currentProviderCustomModelId}
+                                    onApiKeyChange={(key) => {
+                                      void onApiKeysChange(provider.name, key);
+                                    }}
+                                    onAuthModeChange={async (authMode) => {
+                                      const nextProviderSettings = { ...currentProviderSettings, authMode };
+                                      updateProviderSettings(provider.name, nextProviderSettings);
+
+                                      if (provider.name === 'OpenAI' && authMode === 'account') {
+                                        await refreshOpenAIAccountAuth();
+                                      }
+
+                                      if (provider.name === 'Anthropic' && authMode === 'account') {
+                                        await refreshAnthropicAccountAuth();
+                                      }
+
+                                      await refreshProviderModels(provider.name, nextProviderSettings);
+                                    }}
+                                    onAccountLogin={async () => {
+                                      if (provider.name === 'OpenAI') {
+                                        await handleOpenAIAccountLogin();
+                                        return;
+                                      }
+
+                                      if (provider.name === 'Anthropic') {
+                                        await handleAnthropicAccountLogin();
+                                      }
+                                    }}
+                                    onRefreshStatus={async () => {
+                                      await refreshProviderEnvKeyStatus(provider.name);
+
+                                      if (provider.name === 'OpenAI') {
+                                        await refreshOpenAIAccountAuth();
+                                      }
+
+                                      if (provider.name === 'Anthropic') {
+                                        await refreshAnthropicAccountAuth();
+                                      }
+
+                                      await refreshProviderModels(provider.name, currentProviderSettings);
+                                    }}
+                                    onProviderAuthChange={async () => {
+                                      await refreshProviderEnvKeyStatus(provider.name);
+                                      await refreshProviderModels(provider.name, currentProviderSettings);
+                                    }}
+                                    onReasoningEffortChange={(reasoningEffort) => {
+                                      updateProviderSettings(provider.name, {
+                                        ...currentProviderSettings,
+                                        reasoningEffort,
+                                      });
+                                    }}
+                                    onCustomModelIdSave={async (customModelId) => {
+                                      const nextProviderSettings = {
+                                        ...currentProviderSettings,
+                                        customModelId,
+                                      };
+                                      updateProviderSettings(provider.name, nextProviderSettings);
+                                      await refreshProviderModels(provider.name, nextProviderSettings);
+                                    }}
+                                  />
+                                </Popover>
+                              ) : undefined
+                            }
                           />
-                          {(providerList || []).length > 0 &&
-                            provider &&
-                            (!LOCAL_PROVIDERS.includes(provider.name) || 'OpenAILike') && (
-                              <APIKeyManager
-                                provider={provider}
-                                apiKey={apiKeys[provider.name] || ''}
-                                setApiKey={(key) => {
-                                  onApiKeysChange(provider.name, key);
-                                }}
-                              />
-                            )}
                         </div>
                       )}
                     </ClientOnly>
@@ -613,20 +1110,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           disabled={isStreaming}
                         />
                         {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
-                        <IconButton
-                          title="Model Settings"
-                          className={classNames('transition-all flex items-center gap-1', {
-                            'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent':
-                              isModelSettingsCollapsed,
-                            'bg-bolt-elements-item-backgroundDefault text-bolt-elements-item-contentDefault':
-                              !isModelSettingsCollapsed,
-                          })}
-                          onClick={() => setIsModelSettingsCollapsed(!isModelSettingsCollapsed)}
-                          disabled={!providerList || providerList.length === 0}
-                        >
-                          <div className={`i-ph:caret-${isModelSettingsCollapsed ? 'right' : 'down'} text-lg`} />
-                          {isModelSettingsCollapsed ? <span className="text-xs">{model}</span> : <span />}
-                        </IconButton>
                       </div>
                       {input.length > 3 ? (
                         <div className="text-xs text-bolt-elements-textTertiary">

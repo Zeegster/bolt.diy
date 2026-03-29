@@ -12,7 +12,7 @@ import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { description, useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
@@ -27,6 +27,16 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
 import { supabaseConnection } from '~/lib/stores/supabase';
+import {
+  buildAccountTurnMetrics,
+  fnv1a32,
+  hashHex,
+  hashText,
+  mergeUsage,
+  normalizeUsage,
+  safeJsonMetrics,
+  textBytes,
+} from '~/lib/metrics/accountTurnMetrics';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -113,6 +123,88 @@ interface ChatProps {
   description?: string;
 }
 
+type CodexBridgeEvent =
+  | {
+      type: 'thread/tokenUsage/updated';
+      params: {
+        threadId: string;
+        usage?: {
+          inputTokens?: number;
+          cachedInputTokens?: number;
+          outputTokens?: number;
+          totalTokens?: number;
+          totalCostUsd?: number;
+          durationMs?: number;
+          cacheCreationInputTokens?: number;
+          cacheReadInputTokens?: number;
+        };
+      };
+    }
+  | {
+      type: 'item/agentMessage/delta';
+      params: {
+        threadId: string;
+        turnId: string;
+        itemId: string;
+        delta: string;
+      };
+    }
+  | {
+      type: 'turn/completed';
+      params: {
+        threadId: string;
+        turn: {
+          id: string;
+          status: 'completed' | 'interrupted' | 'failed' | 'inProgress';
+          error: {
+            message?: string;
+          } | null;
+          usage?: {
+            inputTokens?: number;
+            cachedInputTokens?: number;
+            outputTokens?: number;
+            totalTokens?: number;
+            totalCostUsd?: number;
+            durationMs?: number;
+            cacheCreationInputTokens?: number;
+            cacheReadInputTokens?: number;
+          };
+        };
+      };
+    }
+  | {
+      type: 'account/login/completed';
+      params: {
+        loginId: string | null;
+        success: boolean;
+        error: string | null;
+      };
+    };
+
+type AccountTurnTracker = {
+  threadId: string;
+  turnId: string;
+  assistantMessageId: string;
+  providerName: string;
+  model: string;
+  effort?: string;
+  startedAtMs: number;
+  firstDeltaAtMs?: number;
+  userInputChars: number;
+  userInputBytes: number;
+  userInputHash: string;
+  payloadChars: number;
+  payloadBytes: number;
+  inboundDeltaChars: number;
+  inboundDeltaBytes: number;
+  inboundEventChars: number;
+  inboundEventBytes: number;
+  responseChars: number;
+  responseBytes: number;
+  responseHashState: number;
+  upstreamUsage?: ReturnType<typeof normalizeUsage>;
+};
+
 export const ChatImpl = memo(
   ({ description, initialMessages, storeMessageHistory, importChat, exportChat }: ChatProps) => {
     useShortcuts();
@@ -131,18 +223,23 @@ export const ChatImpl = memo(
       (project) => project.id === supabaseConn.selectedProjectId,
     );
     const supabaseAlert = useStore(workbenchStore.supabaseAlert);
-    const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
+    const { activeProviders, providers, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('selectedModel');
-      return savedModel || DEFAULT_MODEL;
+      return savedModel || '';
     });
     const [provider, setProvider] = useState(() => {
       const savedProvider = Cookies.get('selectedProvider');
       return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
     });
+    const currentProviderSettings = provider ? providers[provider.name]?.settings : undefined;
+    const isOpenAIAccountMode = provider?.name === 'OpenAI' && currentProviderSettings?.authMode === 'account';
+    const isAnthropicAccountMode = provider?.name === 'Anthropic' && currentProviderSettings?.authMode === 'account';
+    const isProviderAccountMode = isOpenAIAccountMode || isAnthropicAccountMode;
+    const accountReasoningEffort = currentProviderSettings?.reasoningEffort;
 
-    const { showChat } = useStore(chatStore);
+    const { showChat, draftPrefill } = useStore(chatStore);
 
     const [animationScope, animate] = useAnimate();
 
@@ -210,12 +307,21 @@ export const ChatImpl = memo(
       initialMessages,
       initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
     });
+
+    const [accountMessages, setAccountMessages] = useState<Message[]>(initialMessages);
+    const [accountInput, setAccountInput] = useState(Cookies.get(PROMPT_COOKIE_KEY) || '');
+    const [accountIsLoading, setAccountIsLoading] = useState(false);
+    const activeAccountTurnRef = useRef<AccountTurnTracker | null>(null);
     useEffect(() => {
       const prompt = searchParams.get('prompt');
 
       // console.log(prompt, searchParams, model, provider);
 
-      if (prompt) {
+      if (isProviderAccountMode) {
+        return;
+      }
+
+      if (prompt && model && provider?.name) {
         setSearchParams({});
         runAnimation();
         append({
@@ -228,7 +334,7 @@ export const ChatImpl = memo(
           ] as any, // Type assertion to bypass compiler check
         });
       }
-    }, [model, provider, searchParams]);
+    }, [model, provider, searchParams, isProviderAccountMode]);
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
@@ -240,14 +346,43 @@ export const ChatImpl = memo(
     }, []);
 
     useEffect(() => {
+      if (!draftPrefill?.message) {
+        return;
+      }
+
+      const currentComposerValue = isProviderAccountMode ? accountInput : input;
+      const hasDraft = currentComposerValue.trim().length > 0;
+      const shouldReplace =
+        !hasDraft ||
+        !draftPrefill.replaceRequested ||
+        typeof window === 'undefined' ||
+        window.confirm('Replace the current draft in the composer with the publisher action prompt?');
+
+      if (shouldReplace) {
+        if (isProviderAccountMode) {
+          setAccountInput(draftPrefill.message);
+        } else {
+          setInput(draftPrefill.message);
+        }
+
+        textareaRef.current?.focus();
+      }
+
+      chatStore.setKey('draftPrefill', null);
+    }, [accountInput, draftPrefill, input, isProviderAccountMode, setInput]);
+
+    useEffect(() => {
+      const sampledMessages = isProviderAccountMode ? accountMessages : messages;
+      const sampledLoading = isProviderAccountMode ? accountIsLoading : isLoading;
+
       processSampledMessages({
-        messages,
+        messages: sampledMessages,
         initialMessages,
-        isLoading,
+        isLoading: sampledLoading,
         parseMessages,
         storeMessageHistory,
       });
-    }, [messages, isLoading, parseMessages]);
+    }, [messages, isLoading, accountMessages, accountIsLoading, parseMessages, isProviderAccountMode]);
 
     const scrollTextArea = () => {
       const textarea = textareaRef.current;
@@ -257,8 +392,240 @@ export const ChatImpl = memo(
       }
     };
 
+    useEffect(() => {
+      const accountBridge = isOpenAIAccountMode
+        ? window.codexAuth
+        : isAnthropicAccountMode
+          ? window.anthropicAuth
+          : undefined;
+
+      if (!accountBridge?.onEvent) {
+        return undefined;
+      }
+
+      const unsubscribe = accountBridge.onEvent((event: CodexBridgeEvent) => {
+        const activeTurn = activeAccountTurnRef.current;
+
+        if (!activeTurn) {
+          return;
+        }
+
+        const isDeltaEvent = event.type === 'item/agentMessage/delta' && activeTurn.turnId === event.params.turnId;
+        const isCompletedEvent = event.type === 'turn/completed' && activeTurn.turnId === event.params.turn.id;
+        const isTokenUsageEvent =
+          event.type === 'thread/tokenUsage/updated' && activeTurn.threadId === event.params.threadId;
+
+        if (!isDeltaEvent && !isCompletedEvent && !isTokenUsageEvent) {
+          return;
+        }
+
+        const eventEnvelopeMetrics = safeJsonMetrics(event);
+        activeTurn.inboundEventChars += eventEnvelopeMetrics.chars;
+        activeTurn.inboundEventBytes += eventEnvelopeMetrics.bytes;
+
+        if (isTokenUsageEvent) {
+          activeTurn.upstreamUsage = mergeUsage(activeTurn.upstreamUsage, normalizeUsage(event.params.usage));
+          return;
+        }
+
+        if (isDeltaEvent) {
+          const delta = event.params.delta;
+
+          if (typeof activeTurn.firstDeltaAtMs !== 'number') {
+            activeTurn.firstDeltaAtMs = Date.now();
+          }
+
+          activeTurn.inboundDeltaChars += delta.length;
+          activeTurn.inboundDeltaBytes += textBytes(delta);
+          activeTurn.responseChars += delta.length;
+          activeTurn.responseBytes += textBytes(delta);
+          activeTurn.responseHashState = fnv1a32(delta, activeTurn.responseHashState);
+
+          setAccountMessages((prevMessages) =>
+            prevMessages.map((message) =>
+              message.id === activeTurn.assistantMessageId
+                ? {
+                    ...message,
+                    content: `${message.content || ''}${delta}`,
+                  }
+                : message,
+            ),
+          );
+
+          return;
+        }
+
+        if (isCompletedEvent) {
+          setAccountIsLoading(false);
+
+          const completedAtMs = Date.now();
+          const completionUsage = normalizeUsage(event.params.turn.usage);
+          const mergedUsage = mergeUsage(activeTurn.upstreamUsage, completionUsage);
+          const metrics = buildAccountTurnMetrics({
+            provider: activeTurn.providerName,
+            model: activeTurn.model,
+            effort: activeTurn.effort as any,
+            threadId: activeTurn.threadId,
+            turnId: activeTurn.turnId,
+            userInput: {
+              chars: activeTurn.userInputChars,
+              bytes: activeTurn.userInputBytes,
+              hash: activeTurn.userInputHash,
+            },
+            payload: {
+              chars: activeTurn.payloadChars,
+              bytes: activeTurn.payloadBytes,
+            },
+            inbound: {
+              deltaChars: activeTurn.inboundDeltaChars,
+              deltaBytes: activeTurn.inboundDeltaBytes,
+              eventChars: activeTurn.inboundEventChars,
+              eventBytes: activeTurn.inboundEventBytes,
+            },
+            response: {
+              chars: activeTurn.responseChars,
+              bytes: activeTurn.responseBytes,
+              hash: hashHex(activeTurn.responseHashState),
+            },
+            upstreamUsage: mergedUsage,
+            startedAtMs: activeTurn.startedAtMs,
+            firstDeltaAtMs: activeTurn.firstDeltaAtMs,
+            completedAtMs,
+          });
+
+          logStore.logProvider('Account turn overhead measured', {
+            component: 'Chat',
+            action: 'account_turn_metrics',
+            provider: activeTurn.providerName,
+            model: activeTurn.model,
+            threadId: activeTurn.threadId,
+            turnId: activeTurn.turnId,
+            accountTurnMetrics: metrics,
+          });
+
+          if (event.params.turn.status === 'failed') {
+            const errorMessage = event.params.turn.error?.message || `${provider?.name} account turn failed.`;
+            toast.error(errorMessage);
+          }
+
+          activeAccountTurnRef.current = null;
+        }
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    }, [isOpenAIAccountMode, isAnthropicAccountMode, provider?.name]);
+
+    useEffect(() => {
+      if (!isProviderAccountMode) {
+        activeAccountTurnRef.current = null;
+        setAccountIsLoading(false);
+      }
+    }, [isProviderAccountMode]);
+
+    const clearComposerState = () => {
+      Cookies.remove(PROMPT_COOKIE_KEY);
+      setUploadedFiles([]);
+      setImageDataList([]);
+      resetEnhancer();
+      textareaRef.current?.blur();
+    };
+
+    const sendAccountModeMessage = async (finalMessageContent: string) => {
+      const accountBridge = isOpenAIAccountMode
+        ? window.codexAuth
+        : isAnthropicAccountMode
+          ? window.anthropicAuth
+          : undefined;
+
+      if (!accountBridge?.startTurn) {
+        toast.error(`${provider?.name || 'Provider'} account mode is available only in desktop app.`);
+        return;
+      }
+
+      if (imageDataList.length > 0 || uploadedFiles.length > 0) {
+        toast.info(`${provider?.name || 'Provider'} account mode currently supports text-only prompts in this build.`);
+      }
+
+      runAnimation();
+
+      const userMessage: Message = {
+        id: `${Date.now()}-user`,
+        role: 'user',
+        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`,
+      } as Message;
+      const assistantMessage: Message = {
+        id: `${Date.now()}-assistant`,
+        role: 'assistant',
+        content: '',
+      } as Message;
+
+      setAccountMessages((prevMessages) => [...prevMessages, userMessage, assistantMessage]);
+      chatStore.setKey('aborted', false);
+      setAccountInput('');
+      clearComposerState();
+      setAccountIsLoading(true);
+
+      try {
+        const outboundPayload = {
+          input: finalMessageContent,
+          model,
+          effort: accountReasoningEffort,
+        };
+        const payloadMetrics = safeJsonMetrics(outboundPayload);
+        const startedAtMs = Date.now();
+        const turn = await accountBridge.startTurn(outboundPayload);
+        activeAccountTurnRef.current = {
+          threadId: turn.threadId,
+          turnId: turn.turnId,
+          assistantMessageId: assistantMessage.id,
+          providerName: provider.name,
+          model,
+          effort: accountReasoningEffort,
+          startedAtMs,
+          userInputChars: finalMessageContent.length,
+          userInputBytes: textBytes(finalMessageContent),
+          userInputHash: hashText(finalMessageContent),
+          payloadChars: payloadMetrics.chars,
+          payloadBytes: payloadMetrics.bytes,
+          inboundDeltaChars: 0,
+          inboundDeltaBytes: 0,
+          inboundEventChars: 0,
+          inboundEventBytes: 0,
+          responseChars: 0,
+          responseBytes: 0,
+          responseHashState: fnv1a32(''),
+        };
+      } catch (error: any) {
+        setAccountIsLoading(false);
+        activeAccountTurnRef.current = null;
+        toast.error(error?.message || `Failed to start ${provider?.name || 'provider'} account turn.`);
+      }
+    };
+
     const abort = () => {
-      stop();
+      if (isProviderAccountMode) {
+        const activeTurn = activeAccountTurnRef.current;
+        const accountBridge = isOpenAIAccountMode
+          ? window.codexAuth
+          : isAnthropicAccountMode
+            ? window.anthropicAuth
+            : undefined;
+
+        if (activeTurn && accountBridge?.interruptTurn) {
+          void accountBridge.interruptTurn({
+            threadId: activeTurn.threadId,
+            turnId: activeTurn.turnId,
+          });
+        }
+
+        activeAccountTurnRef.current = null;
+        setAccountIsLoading(false);
+      } else {
+        stop();
+      }
+
       chatStore.setKey('aborted', true);
       workbenchStore.abortAllActions();
 
@@ -281,7 +648,7 @@ export const ChatImpl = memo(
         textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
         textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
       }
-    }, [input, textareaRef]);
+    }, [input, accountInput, isProviderAccountMode, textareaRef]);
 
     const runAnimation = async () => {
       if (chatStarted) {
@@ -299,19 +666,34 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
-      const messageContent = messageInput || input;
+      const messageContent = messageInput || (isProviderAccountMode ? accountInput : input);
 
       if (!messageContent?.trim()) {
         return;
       }
 
-      if (isLoading) {
+      if (!provider?.name) {
+        toast.error('Выберите провайдера перед отправкой сообщения.');
+        return;
+      }
+
+      if (!model) {
+        toast.error('Модели недоступны. Подключите API или войдите в аккаунт провайдера.');
+        return;
+      }
+
+      if (isProviderAccountMode ? accountIsLoading : isLoading) {
         abort();
         return;
       }
 
       // If no locked items, proceed normally with the original message
       const finalMessageContent = messageContent;
+
+      if (isProviderAccountMode) {
+        await sendAccountModeMessage(finalMessageContent);
+        return;
+      }
 
       runAnimation();
 
@@ -367,14 +749,7 @@ export const ChatImpl = memo(
               ]);
               reload();
               setInput('');
-              Cookies.remove(PROMPT_COOKIE_KEY);
-
-              setUploadedFiles([]);
-              setImageDataList([]);
-
-              resetEnhancer();
-
-              textareaRef.current?.blur();
+              clearComposerState();
               setFakeLoading(false);
 
               return;
@@ -402,14 +777,7 @@ export const ChatImpl = memo(
         reload();
         setFakeLoading(false);
         setInput('');
-        Cookies.remove(PROMPT_COOKIE_KEY);
-
-        setUploadedFiles([]);
-        setImageDataList([]);
-
-        resetEnhancer();
-
-        textareaRef.current?.blur();
+        clearComposerState();
 
         return;
       }
@@ -456,14 +824,7 @@ export const ChatImpl = memo(
       }
 
       setInput('');
-      Cookies.remove(PROMPT_COOKIE_KEY);
-
-      setUploadedFiles([]);
-      setImageDataList([]);
-
-      resetEnhancer();
-
-      textareaRef.current?.blur();
+      clearComposerState();
     };
 
     /**
@@ -471,6 +832,11 @@ export const ChatImpl = memo(
      * @param event - The change event from the textarea.
      */
     const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (isProviderAccountMode) {
+        setAccountInput(event.target.value);
+        return;
+      }
+
       handleInputChange(event);
     };
 
@@ -496,7 +862,12 @@ export const ChatImpl = memo(
 
     const handleModelChange = (newModel: string) => {
       setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
+
+      if (newModel) {
+        Cookies.set('selectedModel', newModel, { expires: 30 });
+      } else {
+        Cookies.remove('selectedModel');
+      }
     };
 
     const handleProviderChange = (newProvider: ProviderInfo) => {
@@ -504,14 +875,30 @@ export const ChatImpl = memo(
       Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
     };
 
+    const activeInput = isProviderAccountMode ? accountInput : input;
+    const activeStreaming = (isProviderAccountMode ? accountIsLoading : isLoading) || fakeLoading;
+    const activeMessages = isProviderAccountMode
+      ? accountMessages
+      : messages.map((message, i) => {
+          if (message.role === 'user') {
+            return message;
+          }
+
+          return {
+            ...message,
+            content: parsedMessages[i] || '',
+          };
+        });
+    const activeData = isProviderAccountMode ? undefined : chatData;
+
     return (
       <BaseChat
         ref={animationScope}
         textareaRef={textareaRef}
-        input={input}
+        input={activeInput}
         showChat={showChat}
         chatStarted={chatStarted}
-        isStreaming={isLoading || fakeLoading}
+        isStreaming={activeStreaming}
         onStreamingChange={(streaming) => {
           streamingState.set(streaming);
         }}
@@ -531,21 +918,17 @@ export const ChatImpl = memo(
         description={description}
         importChat={importChat}
         exportChat={exportChat}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
-
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
+        messages={activeMessages}
         enhancePrompt={() => {
           enhancePrompt(
-            input,
+            activeInput,
             (input) => {
-              setInput(input);
+              if (isProviderAccountMode) {
+                setAccountInput(input);
+              } else {
+                setInput(input);
+              }
+
               scrollTextArea();
             },
             model,
@@ -563,7 +946,7 @@ export const ChatImpl = memo(
         clearSupabaseAlert={() => workbenchStore.clearSupabaseAlert()}
         deployAlert={deployAlert}
         clearDeployAlert={() => workbenchStore.clearDeployAlert()}
-        data={chatData}
+        data={activeData}
       />
     );
   },

@@ -7,6 +7,10 @@ import { createOpenAI } from '@ai-sdk/openai';
 export default class GroqProvider extends BaseProvider {
   name = 'Groq';
   getApiKeyLink = 'https://console.groq.com/keys';
+  supportsApiKey = true;
+  supportsAccountAuth = false;
+  requiresAuthForModels = true;
+  unavailableMessage = 'Модели недоступны. Подключите API key.';
 
   config = {
     apiTokenKey: 'GROQ_API_KEY',
@@ -61,6 +65,7 @@ export default class GroqProvider extends BaseProvider {
       label: `${m.id} - context ${m.context_window ? Math.floor(m.context_window / 1000) + 'k' : 'N/A'} [ by ${m.owned_by}]`,
       provider: this.name,
       maxTokenAllowed: m.context_window || 8000,
+      source: 'dynamic',
     }));
   }
 

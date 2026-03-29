@@ -33,7 +33,7 @@ export type ArtifactUpdateState = Pick<ArtifactState, 'title' | 'closed'>;
 
 type Artifacts = MapStore<Record<string, ArtifactState>>;
 
-export type WorkbenchViewType = 'code' | 'diff' | 'preview';
+export type WorkbenchViewType = 'code' | 'diff' | 'preview' | 'structure';
 
 export class WorkbenchStore {
   #previewsStore = new PreviewsStore(webcontainer);
@@ -340,11 +340,23 @@ export class WorkbenchStore {
   }
 
   async createFile(filePath: string, content: string | Uint8Array = '') {
+    return this.#createFile(filePath, content);
+  }
+
+  async #createFile(
+    filePath: string,
+    content: string | Uint8Array = '',
+    options: { select?: boolean; trackModification?: boolean } = {},
+  ) {
     try {
-      const success = await this.#filesStore.createFile(filePath, content);
+      const success = await this.#filesStore.createFile(filePath, content, {
+        trackModification: options.trackModification,
+      });
 
       if (success) {
-        this.setSelectedFile(filePath);
+        if (options.select ?? true) {
+          this.setSelectedFile(filePath);
+        }
 
         /*
          * For empty files, we need to ensure they're not marked as unsaved
@@ -362,6 +374,27 @@ export class WorkbenchStore {
       console.error('Failed to create file:', error);
       throw error;
     }
+  }
+
+  async writeFile(filePath: string, content: string) {
+    return this.#writeFile(filePath, content);
+  }
+
+  async writeSystemFile(filePath: string, content: string) {
+    return this.#writeFile(filePath, content, { trackModification: false, select: false });
+  }
+
+  async #writeFile(filePath: string, content: string, options: { trackModification?: boolean; select?: boolean } = {}) {
+    const existingFile = this.#filesStore.getFile(filePath);
+
+    if (existingFile) {
+      await this.#filesStore.saveFile(filePath, content, {
+        trackModification: options.trackModification,
+      });
+      return true;
+    }
+
+    return this.#createFile(filePath, content, options);
   }
 
   async createFolder(folderPath: string) {

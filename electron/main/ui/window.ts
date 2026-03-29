@@ -1,13 +1,35 @@
 import { app, BrowserWindow } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { isDev } from '../utils/constants';
 import { store } from '../utils/store';
+
+function resolvePreloadPath() {
+  const appPath = app.getAppPath();
+  const candidates = [
+    path.join(appPath, 'build', 'electron', 'preload', 'index.cjs'),
+    path.join(appPath, '..', 'preload', 'index.cjs'),
+    path.join(process.cwd(), 'build', 'electron', 'preload', 'index.cjs'),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Keep Electron erroring with a useful path if all candidates fail.
+  return candidates[0];
+}
 
 export function createWindow(rendererURL: string) {
   console.log('Creating window with URL:', rendererURL);
 
   const bounds = store.get('bounds');
   console.log('restored bounds:', bounds);
+
+  const preloadPath = resolvePreloadPath();
+  console.log('Using preload path:', preloadPath);
 
   const win = new BrowserWindow({
     ...{
@@ -18,7 +40,7 @@ export function createWindow(rendererURL: string) {
     vibrancy: 'under-window',
     visualEffectState: 'active',
     webPreferences: {
-      preload: path.join(app.getAppPath(), 'build', 'electron', 'preload', 'index.cjs'),
+      preload: preloadPath,
     },
   });
 

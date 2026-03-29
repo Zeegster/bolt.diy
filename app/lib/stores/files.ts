@@ -21,6 +21,7 @@ import {
   clearCache,
 } from '~/lib/persistence/lockedFiles';
 import { getCurrentChatId } from '~/utils/fileLocks';
+import { isPublisherSystemFile } from '~/lib/publisher/ui-state';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -523,6 +524,10 @@ export class FilesStore {
     let modifiedFiles: { [path: string]: File } | undefined = undefined;
 
     for (const [filePath, originalContent] of this.#modifiedFiles) {
+      if (isPublisherSystemFile(filePath)) {
+        continue;
+      }
+
       const file = this.files.get()[filePath];
 
       if (file?.type !== 'file') {
@@ -547,8 +552,30 @@ export class FilesStore {
     this.#modifiedFiles.clear();
   }
 
-  async saveFile(filePath: string, content: string) {
+  #updateFileRecord(filePath: string, content: string, isBinary: boolean, isLocked = false) {
+    this.files.setKey(filePath, {
+      type: 'file',
+      content,
+      isBinary,
+      isLocked,
+    });
+  }
+
+  #trackFileModification(filePath: string, oldContent: string) {
+    if (!this.#modifiedFiles.has(filePath)) {
+      this.#modifiedFiles.set(filePath, oldContent);
+    }
+  }
+
+  #clearFileModification(filePath: string) {
+    if (this.#modifiedFiles.has(filePath)) {
+      this.#modifiedFiles.delete(filePath);
+    }
+  }
+
+  async saveFile(filePath: string, content: string, options: { trackModification?: boolean } = {}) {
     const webcontainer = await this.#webcontainer;
+    const trackModification = options.trackModification ?? true;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, filePath);
@@ -565,8 +592,10 @@ export class FilesStore {
 
       await webcontainer.fs.writeFile(relativePath, content);
 
-      if (!this.#modifiedFiles.has(filePath)) {
-        this.#modifiedFiles.set(filePath, oldContent);
+      if (trackModification) {
+        this.#trackFileModification(filePath, oldContent);
+      } else {
+        this.#clearFileModification(filePath);
       }
 
       // Get the current lock state before updating
@@ -574,12 +603,7 @@ export class FilesStore {
       const isLocked = currentFile?.type === 'file' ? currentFile.isLocked : false;
 
       // we immediately update the file and don't rely on the `change` event coming from the watcher
-      this.files.setKey(filePath, {
-        type: 'file',
-        content,
-        isBinary: false,
-        isLocked,
-      });
+      this.#updateFileRecord(filePath, content, false, isLocked);
 
       logger.info('File updated');
     } catch (error) {
@@ -798,8 +822,9 @@ export class FilesStore {
     }
   }
 
-  async createFile(filePath: string, content: string | Uint8Array = '') {
+  async createFile(filePath: string, content: string | Uint8Array = '', options: { trackModification?: boolean } = {}) {
     const webcontainer = await this.#webcontainer;
+    const trackModification = options.trackModification ?? true;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, filePath);
@@ -820,26 +845,24 @@ export class FilesStore {
         await webcontainer.fs.writeFile(relativePath, Buffer.from(content));
 
         const base64Content = Buffer.from(content).toString('base64');
-        this.files.setKey(filePath, {
-          type: 'file',
-          content: base64Content,
-          isBinary: true,
-          isLocked: false,
-        });
+        this.#updateFileRecord(filePath, base64Content, true);
 
-        this.#modifiedFiles.set(filePath, base64Content);
+        if (trackModification) {
+          this.#modifiedFiles.set(filePath, base64Content);
+        } else {
+          this.#clearFileModification(filePath);
+        }
       } else {
         const contentToWrite = (content as string).length === 0 ? ' ' : content;
         await webcontainer.fs.writeFile(relativePath, contentToWrite);
 
-        this.files.setKey(filePath, {
-          type: 'file',
-          content: content as string,
-          isBinary: false,
-          isLocked: false,
-        });
+        this.#updateFileRecord(filePath, content as string, false);
 
-        this.#modifiedFiles.set(filePath, content as string);
+        if (trackModification) {
+          this.#modifiedFiles.set(filePath, content as string);
+        } else {
+          this.#clearFileModification(filePath);
+        }
       }
 
       logger.info(`File created: ${filePath}`);

@@ -231,6 +231,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
+
+            if (!model || !provider) {
+              throw new Error('Model/provider metadata is missing for continuation turn.');
+            }
+
             messages.push({ id: generateId(), role: 'assistant', content });
             messages.push({
               id: generateId(),

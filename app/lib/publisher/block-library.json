@@ -1,0 +1,112 @@
+[
+  {
+    "id": "site-header-basic",
+    "zone": "header",
+    "variant": "basic",
+    "name": "Simple Header",
+    "tags": ["navigation", "shell"],
+    "slots": [
+      { "key": "brandName", "label": "Brand", "required": true, "kind": "text" },
+      { "key": "primaryLinkLabel", "label": "Primary Link Label", "required": true, "kind": "text" },
+      { "key": "primaryLinkHref", "label": "Primary Link URL", "required": true, "kind": "link" },
+      { "key": "secondaryLinkLabel", "label": "Secondary Link Label", "kind": "text" },
+      { "key": "secondaryLinkHref", "label": "Secondary Link URL", "kind": "link" }
+    ],
+    "tokenKeys": ["color.surface", "color.text", "color.primary", "color.border"],
+    "templateFile": "site-header-basic.html",
+    "source": "library"
+  },
+  {
+    "id": "before-content-band",
+    "zone": "beforeContent",
+    "variant": "band",
+    "name": "Announcement Band",
+    "tags": ["shell", "announcement"],
+    "slots": [
+      { "key": "eyebrow", "label": "Eyebrow", "required": true, "kind": "text" },
+      { "key": "message", "label": "Message", "required": true, "kind": "text" }
+    ],
+    "tokenKeys": ["color.accent", "color.accentText"],
+    "templateFile": "before-content-band.html",
+    "source": "library"
+  },
+  {
+    "id": "hero-centered",
+    "zone": "content",
+    "variant": "hero",
+    "name": "Centered Hero",
+    "tags": ["hero", "landing"],
+    "slots": [
+      { "key": "eyebrow", "label": "Eyebrow", "kind": "text" },
+      { "key": "title", "label": "Title", "required": true, "kind": "text" },
+      { "key": "body", "label": "Body", "required": true, "kind": "richtext" },
+      { "key": "primaryCtaLabel", "label": "Primary CTA Label", "required": true, "kind": "text" },
+      { "key": "primaryCtaHref", "label": "Primary CTA URL", "required": true, "kind": "link" }
+    ],
+    "tokenKeys": ["color.background", "color.text", "color.primary", "color.primaryText"],
+    "templateFile": "hero-centered.html",
+    "source": "library"
+  },
+  {
+    "id": "content-prose",
+    "zone": "content",
+    "variant": "prose",
+    "name": "Prose Section",
+    "tags": ["content", "body"],
+    "slots": [
+      { "key": "sectionTitle", "label": "Section Title", "required": true, "kind": "text" },
+      { "key": "html", "label": "HTML Content", "required": true, "kind": "richtext" }
+    ],
+    "tokenKeys": ["color.surface", "color.text", "color.border"],
+    "templateFile": "content-prose.html",
+    "source": "library"
+  },
+  {
+    "id": "sidebar-links",
+    "zone": "sidebar",
+    "variant": "links",
+    "name": "Sidebar Links",
+    "tags": ["navigation", "sidebar"],
+    "slots": [
+      { "key": "title", "label": "Sidebar Title", "required": true, "kind": "text" },
+      { "key": "linkOneLabel", "label": "Link One Label", "required": true, "kind": "text" },
+      { "key": "linkOneHref", "label": "Link One URL", "required": true, "kind": "link" },
+      { "key": "linkTwoLabel", "label": "Link Two Label", "kind": "text" },
+      { "key": "linkTwoHref", "label": "Link Two URL", "kind": "link" }
+    ],
+    "tokenKeys": ["color.surfaceMuted", "color.text", "color.border"],
+    "templateFile": "sidebar-links.html",
+    "source": "library"
+  },
+  {
+    "id": "after-content-cta",
+    "zone": "afterContent",
+    "variant": "cta",
+    "name": "After Content CTA",
+    "tags": ["cta"],
+    "slots": [
+      { "key": "title", "label": "CTA Title", "required": true, "kind": "text" },
+      { "key": "body", "label": "CTA Body", "required": true, "kind": "text" },
+      { "key": "buttonLabel", "label": "Button Label", "required": true, "kind": "text" },
+      { "key": "buttonHref", "label": "Button URL", "required": true, "kind": "link" }
+    ],
+    "tokenKeys": ["color.primary", "color.primaryText", "color.surface"],
+    "templateFile": "after-content-cta.html",
+    "source": "library"
+  },
+  {
+    "id": "site-footer-simple",
+    "zone": "footer",
+    "variant": "simple",
+    "name": "Simple Footer",
+    "tags": ["shell", "footer"],
+    "slots": [
+      { "key": "copyright", "label": "Copyright", "required": true, "kind": "text" },
+      { "key": "footerLinkLabel", "label": "Footer Link Label", "kind": "text" },
+      { "key": "footerLinkHref", "label": "Footer Link URL", "kind": "link" }
+    ],
+    "tokenKeys": ["color.surface", "color.textMuted", "color.border"],
+    "templateFile": "site-footer-simple.html",
+    "source": "library"
+  }
+]

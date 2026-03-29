@@ -15,17 +15,19 @@ import {
 } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { IconButton } from '~/components/ui/IconButton';
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
-import { Slider, type SliderOptions } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
+import { StructureView } from './StructureView';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { usePreviewStore } from '~/lib/stores/previews';
+import { useRef } from 'react';
+import { resolveWorkbenchAutoView } from '~/lib/publisher/ui-state';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -39,20 +41,12 @@ interface WorkspaceProps {
 
 const viewTransition = { ease: cubicEasingFn };
 
-const sliderOptions: SliderOptions<WorkbenchViewType> = {
-  left: {
-    value: 'code',
-    text: 'Code',
-  },
-  middle: {
-    value: 'diff',
-    text: 'Diff',
-  },
-  right: {
-    value: 'preview',
-    text: 'Preview',
-  },
-};
+const viewTabs: Array<{ value: WorkbenchViewType; text: string }> = [
+  { value: 'code', text: 'Code' },
+  { value: 'diff', text: 'Diff' },
+  { value: 'preview', text: 'Preview' },
+  { value: 'structure', text: 'Structure' },
+];
 
 const workbenchVariants = {
   closed: {
@@ -288,12 +282,18 @@ export const Workbench = memo(
     // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
 
     const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
+    const hasPublisherContract = useStore(
+      computed(workbenchStore.files, (fileMap) =>
+        Object.keys(fileMap).some((filePath) => filePath.startsWith('/home/project/.bolt/publisher/')),
+      ),
+    );
     const showWorkbench = useStore(workbenchStore.showWorkbench);
     const selectedFile = useStore(workbenchStore.selectedFile);
     const currentDocument = useStore(workbenchStore.currentDocument);
     const unsavedFiles = useStore(workbenchStore.unsavedFiles);
     const files = useStore(workbenchStore.files);
     const selectedView = useStore(workbenchStore.currentView);
+    const hadPreviewRef = useRef(hasPreview);
 
     const isSmallViewport = useViewport(1024);
 
@@ -302,10 +302,19 @@ export const Workbench = memo(
     };
 
     useEffect(() => {
-      if (hasPreview) {
-        setSelectedView('preview');
+      const nextView = resolveWorkbenchAutoView({
+        hadPreview: hadPreviewRef.current,
+        hasPreview,
+        currentView: selectedView,
+        hasPublisherContract,
+      });
+
+      hadPreviewRef.current = hasPreview;
+
+      if (nextView && nextView !== selectedView) {
+        setSelectedView(nextView);
       }
-    }, [hasPreview]);
+    }, [hasPreview, hasPublisherContract, selectedView]);
 
     useEffect(() => {
       workbenchStore.setDocuments(files);
@@ -382,7 +391,29 @@ export const Workbench = memo(
             <div className="absolute inset-0 px-2 lg:px-6">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor gap-1">
-                  <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                  <div className="flex items-center flex-wrap shrink-0 gap-1 bg-bolt-elements-background-depth-1 overflow-hidden rounded-full p-1">
+                    {viewTabs.map((tab) => {
+                      const isDisabled = tab.value === 'preview' ? !hasPreview : false;
+                      const isSelected = selectedView === tab.value;
+
+                      return (
+                        <button
+                          key={tab.value}
+                          onClick={() => !isDisabled && setSelectedView(tab.value)}
+                          disabled={isDisabled}
+                          className={classNames(
+                            'text-sm px-2.5 py-0.5 rounded-full relative transition-colors',
+                            isSelected
+                              ? 'text-bolt-elements-item-contentAccent bg-bolt-elements-item-backgroundAccent'
+                              : 'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive',
+                            isDisabled ? 'opacity-40 cursor-not-allowed' : undefined,
+                          )}
+                        >
+                          {tab.text}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="ml-auto" />
                   {selectedView === 'code' && (
                     <div className="flex overflow-y-auto">
@@ -489,6 +520,9 @@ export const Workbench = memo(
                   </View>
                   <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}>
                     <Preview />
+                  </View>
+                  <View initial={{ x: '100%' }} animate={{ x: selectedView === 'structure' ? '0%' : '100%' }}>
+                    <StructureView />
                   </View>
                 </div>
               </div>
