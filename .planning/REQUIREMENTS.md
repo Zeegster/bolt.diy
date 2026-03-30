@@ -12,10 +12,10 @@
 
 ### Intake and Source Normalization
 
-- [ ] **INTK-01**: Operator can import document-only source packs and template-plus-documents source packs.
+- [x] **INTK-01**: Operator can import document-only source packs and template-plus-documents source packs.
 - [x] **INTK-02**: Intake identifies ambiguity in family/template/home-page selection and surfaces it as an explicit review step.
 - [x] **INTK-03**: Source metadata and extracted content can be corrected inline without losing source-of-truth visibility.
-- [ ] **INTK-04**: Intake sessions, source manifests, and operator edits are persisted and recoverable.
+- [x] **INTK-04**: Intake sessions, source manifests, and operator edits are persisted and recoverable.
 
 ### Contracts and Block System
 
@@ -29,13 +29,13 @@
 
 - [x] **META-01**: The application generates and owns `<head>`, canonical URLs, robots, sitemap, schema JSON-LD, favicon/meta image tags, and language defaults.
 - [x] **META-02**: `title`, `description`, and `h1` come only from intake documents and approved contract edits.
-- [ ] **META-03**: Generated output includes deterministic metadata, provenance, and stable artifact fingerprints.
+- [x] **META-03**: Generated output includes deterministic metadata, provenance, and stable artifact fingerprints.
 
 ### Build and Assets
 
-- [ ] **BUILD-01**: Output is assembled only from approved contracts through a one-way generation path.
-- [ ] **BUILD-02**: Generated files use normalized public paths and stable file mapping.
-- [ ] **BUILD-03**: Asset ingestion normalizes names, hashes duplicates, and captures dimensions needed for rendering and image policy checks.
+- [x] **BUILD-01**: Output is assembled only from approved contracts through a one-way generation path.
+- [x] **BUILD-02**: Generated files use normalized public paths and stable file mapping.
+- [x] **BUILD-03**: Asset ingestion normalizes names, hashes duplicates, and captures dimensions needed for rendering and image policy checks.
 - [x] **BUILD-04**: Build pipeline supports a distinct optimize/check stage after assembly.
 
 ### Operator Workflow
@@ -47,10 +47,10 @@
 
 ### Agent Layer
 
-- [ ] **AGNT-01**: Agents work only on approved publisher files and contracts.
-- [ ] **AGNT-02**: Agents are limited to `normalize`, `map`, `fill`, and `repair` actions.
-- [ ] **AGNT-03**: Agents cannot create new block types, new zones, or freeform SEO/runtime output unless explicitly requested.
-- [ ] **AGNT-04**: Agent prompts and context clearly communicate reserved ownership boundaries and failure-repair loops.
+- [x] **AGNT-01**: Agents work only on approved publisher files and contracts.
+- [x] **AGNT-02**: Agents are limited to `normalize`, `map`, `fill`, and `repair` actions.
+- [x] **AGNT-03**: Agents cannot create new block types, new zones, or freeform SEO/runtime output unless explicitly requested.
+- [x] **AGNT-04**: Agent prompts and context clearly communicate reserved ownership boundaries and failure-repair loops.
 
 ### Validation and Release Gates
 
@@ -93,10 +93,10 @@
 |-------------|-------|--------|
 | PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 1 | Complete |
-| INTK-01 | Phase 2 | Pending |
+| INTK-01 | Phase 2 | Complete |
 | INTK-02 | Phase 2 | Complete |
 | INTK-03 | Phase 2 | Complete |
-| INTK-04 | Phase 2 | Pending |
+| INTK-04 | Phase 2 | Complete |
 | CONT-01 | Phase 1 | Complete |
 | CONT-02 | Phase 1 | Complete |
 | CONT-03 | Phase 1 | Complete |
@@ -104,19 +104,19 @@
 | CONT-05 | Phase 1 | Complete |
 | META-01 | Phase 1 | Complete |
 | META-02 | Phase 1 | Complete |
-| META-03 | Phase 3 | Pending |
-| BUILD-01 | Phase 3 | Pending |
-| BUILD-02 | Phase 3 | Pending |
-| BUILD-03 | Phase 3 | Pending |
+| META-03 | Phase 3 | Complete |
+| BUILD-01 | Phase 3 | Complete |
+| BUILD-02 | Phase 3 | Complete |
+| BUILD-03 | Phase 3 | Complete |
 | BUILD-04 | Phase 4 | Complete |
 | OPER-01 | Phase 2 | Complete |
 | OPER-02 | Phase 2 | Complete |
 | OPER-03 | Phase 2 | Complete |
 | OPER-04 | Phase 4 | Complete |
-| AGNT-01 | Phase 5 | Pending |
-| AGNT-02 | Phase 5 | Pending |
-| AGNT-03 | Phase 5 | Pending |
-| AGNT-04 | Phase 5 | Pending |
+| AGNT-01 | Phase 5 | Complete |
+| AGNT-02 | Phase 5 | Complete |
+| AGNT-03 | Phase 5 | Complete |
+| AGNT-04 | Phase 5 | Complete |
 | VAL-01 | Phase 4 | Complete |
 | VAL-02 | Phase 4 | Complete |
 | VAL-03 | Phase 4 | Complete |
@@ -124,11 +124,11 @@
 | PUB-01 | Phase 4 | Complete |
 | PUB-02 | Phase 4 | Complete |
 | PUB-03 | Phase 4 | Complete |
-| BATCH-01 | Phase 6 | Pending |
-| BATCH-02 | Phase 6 | Pending |
-| BATCH-03 | Phase 6 | Pending |
-| QUAL-01 | Phase 6 | Pending |
-| QUAL-02 | Phase 6 | Pending |
+| BATCH-01 | Phase 6 | Complete |
+| BATCH-02 | Phase 6 | Complete |
+| BATCH-03 | Phase 6 | Complete |
+| QUAL-01 | Phase 6 | Complete |
+| QUAL-02 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 31 total

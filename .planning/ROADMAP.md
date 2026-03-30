@@ -10,8 +10,8 @@ The codebase already contains a real publisher foundation inside a larger AI wor
 - [x] **Phase 2: Operator Review Workflow** - Turn the current review workbench into an explicit intake/review/release operator flow. Completed 2026-03-30.
 - [x] **Phase 3: Deterministic Assets and Provenance** - Make asset handling and generated outputs stable enough for release operations. (completed 2026-03-30)
 - [x] **Phase 4: Release Pipeline and Quality Gates** - Separate assemble/optimize/check/publish and enforce release-grade verification. (completed 2026-03-30)
-- [ ] **Phase 5: Agent Operating Model** - Lock down how agents interact with publisher files, blocks, contracts, and repair loops.
-- [ ] **Phase 6: Batch Readiness** - Add queue/inbox, throughput visibility, and server-ready seams after the single-operator workflow is stable.
+- [x] **Phase 5: Agent Operating Model** - Lock down how agents interact with publisher files, blocks, contracts, and repair loops. (completed 2026-03-30)
+- [x] **Phase 6: Batch Readiness** - Add queue/inbox, throughput visibility, and server-ready seams after the single-operator workflow is stable. (completed 2026-03-30)
 
 ## Phase Details
 
@@ -77,9 +77,24 @@ Plans:
 - [x] 04-03: Formalize export/publish contract, artifact shape, and rollback or rebuild strategy.
 - [x] 04-04: Expand integration/tests/CI coverage for release behavior and future Lighthouse gating.
 
+### Phase 04.1: Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract (INSERTED)
+**Goal**: Bridge external HTML/Markdown intake into deterministic publisher contracts with strict guardrails and batch-safe metadata normalization.
+**Depends on**: Phase 4
+**Requirements**: [INTK-01, INTK-04, META-03, BUILD-01, BUILD-02, BUILD-03]
+**Success Criteria** (what must be TRUE):
+  1. Intake adapter accepts `html-bundle`, `markdown`, and `content-source` families, resolves disambiguation deterministically, and persists recoverable intake sessions.
+  2. Guardrails enforce source ownership boundaries (no app-owned head/runtime overrides), heading integrity, and block unsafe freeform output before contract generation.
+  3. Batch normalize contract (`pages[]: slug/title/description/heading/source`) is implemented for unresolved metadata and integrates with intake review workflows for `10-20` sites/day operations.
+**Plans**: 3 plans
+
+Plans:
+- [x] 04.1-01: Define and validate deterministic normalize contracts + strict markdown/html guardrails.
+- [x] 04.1-02: Implement site-builder intake adapter (source-family detection, assets/links normalization, session persistence).
+- [x] 04.1-03: Wire batch metadata normalization loop and fixture-based release checks for imported packs.
+
 ### Phase 5: Agent Operating Model
 **Goal**: Agent behavior in publisher mode becomes explicit, constrained, and repair-oriented instead of generative-by-default.
-**Depends on**: Phase 4
+**Depends on**: Phase 04.1
 **Requirements**: [AGNT-01, AGNT-02, AGNT-03, AGNT-04]
 **Success Criteria** (what must be TRUE):
   1. Agent prompts, docs, and runtime checks encode reserved ownership and forbidden outputs.
@@ -88,9 +103,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Tighten prompt ownership boundaries and reserved publisher file scope.
-- [ ] 05-02-PLAN.md — Add typed `normalize|map|fill|repair` action contract and runtime publisher write guard.
-- [ ] 05-03-PLAN.md — Wire release diagnostics to confirmation-gated repair prompts.
+- [x] 05-01-PLAN.md — Tighten prompt ownership boundaries and reserved publisher file scope.
+- [x] 05-02-PLAN.md — Add typed `normalize|map|fill|repair` action contract and runtime publisher write guard.
+- [x] 05-03-PLAN.md — Wire release diagnostics to confirmation-gated repair prompts.
 
 ### Phase 6: Batch Readiness
 **Goal**: After the single-operator pipeline is stable, the system gains queue, metrics, and orchestration seams needed for `10-20` sites/day.
@@ -103,20 +118,21 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: Build intake queue/inbox model with readiness, ambiguity, and stuck-state signals.
-- [ ] 06-02: Add throughput, failure-bucket, and operator-efficiency metrics.
-- [ ] 06-03: Prepare server-ready orchestration seams and optional Lighthouse-based release enhancements.
+- [x] 06-01: Build intake queue/inbox model with readiness, ambiguity, and stuck-state signals.
+- [x] 06-02: Add throughput, failure-bucket, and operator-efficiency metrics.
+- [x] 06-03: Prepare server-ready orchestration seams and optional Lighthouse-based release enhancements.
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract Safety and Registry v2 | 3/3 | Complete | 2026-03-30 |
 | 2. Operator Review Workflow | 4/4 | Complete | 2026-03-30 |
 | 3. Deterministic Assets and Provenance | 3/3 | Complete   | 2026-03-30 |
-| 4. Release Pipeline and Quality Gates | 0/4 | Complete    | 2026-03-30 |
-| 5. Agent Operating Model | 0/3 | Not started | - |
-| 6. Batch Readiness | 0/3 | Not started | - |
+| 4. Release Pipeline and Quality Gates | 4/4 | Complete    | 2026-03-30 |
+| 4.1 Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract | 3/3 | Complete   | 2026-03-30 |
+| 5. Agent Operating Model | 3/3 | Complete   | 2026-03-30 |
+| 6. Batch Readiness | 3/3 | Complete   | 2026-03-30 |
