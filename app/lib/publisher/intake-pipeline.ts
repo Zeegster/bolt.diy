@@ -175,11 +175,52 @@ function renderPlainSectionContent(content: string) {
     .join('\n');
 }
 
-function renderSection(section: IntakeSectionDraft, sourceFamily: IntakePageDraft['sourceFamily']) {
-  const blocks: string[] = [];
+function parseHeadingLevel(value: unknown): 1 | 2 | 3 | 4 | 5 | 6 | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 6
+    ? (value as 1 | 2 | 3 | 4 | 5 | 6)
+    : null;
+}
 
-  if (section.heading?.trim()) {
-    blocks.push(`<h2>${escapeHtml(section.heading.trim())}</h2>`);
+function normalizeSectionHeading(
+  section: IntakeSectionDraft,
+  pageH1?: string,
+): { text: string; level: 1 | 2 | 3 | 4 | 5 | 6 } | null {
+  const rawHeading = section.heading?.trim();
+
+  if (!rawHeading) {
+    return null;
+  }
+
+  const explicitLevel = parseHeadingLevel(section.level);
+
+  if (explicitLevel) {
+    return { text: rawHeading, level: explicitLevel };
+  }
+
+  const markdownHeading = rawHeading.match(/^(#{1,6})\s+(.+)$/);
+
+  if (markdownHeading) {
+    return {
+      text: markdownHeading[2].trim(),
+      level: markdownHeading[1].length as 1 | 2 | 3 | 4 | 5 | 6,
+    };
+  }
+
+  const normalizedH1 = pageH1?.trim();
+
+  if (normalizedH1 && rawHeading === normalizedH1) {
+    return { text: rawHeading, level: 1 };
+  }
+
+  return { text: rawHeading, level: 2 };
+}
+
+function renderSection(section: IntakeSectionDraft, sourceFamily: IntakePageDraft['sourceFamily'], pageH1?: string) {
+  const blocks: string[] = [];
+  const heading = normalizeSectionHeading(section, pageH1);
+
+  if (heading) {
+    blocks.push(`<h${heading.level}>${escapeHtml(heading.text)}</h${heading.level}>`);
   }
 
   const shouldPreserveHtml = sourceFamily === 'html' || section.kind === 'html';
@@ -193,10 +234,18 @@ function renderPageContent(page: IntakePageDraft) {
     return page.bodyHtml?.trim() || '';
   }
 
-  return page.sections
-    .map((section) => renderSection(section, page.sourceFamily))
+  const content = page.sections
+    .map((section) => renderSection(section, page.sourceFamily, page.h1))
     .filter(Boolean)
     .join('\n');
+
+  const h1 = page.h1?.trim();
+
+  if (!h1 || /<h1[\s>]/i.test(content)) {
+    return content;
+  }
+
+  return `<h1>${escapeHtml(h1)}</h1>\n${content}`.trim();
 }
 
 function createProjectAssetRef(asset?: IntakeSession['project']['favicon']): AssetRef | undefined {
@@ -401,7 +450,7 @@ export function buildIntakeNormalizePrompt(input: IntakeNormalizePromptInput) {
     user: [
       'Твоя задача — извлечь поля из исходного документа без переписывания текста.',
       'Не улучшай стиль, не сокращай, не добавляй новый текст, не переводи и не интерпретируй.',
-      'Верни только JSON по схеме: { "title": string | null, "description": string | null, "h1": string | null, "sections": [{ "heading": string | null, "content": string }], "unresolved": string[], "notes": string[] }.',
+      'Верни только JSON по схеме: { "title": string | null, "description": string | null, "h1": string | null, "sections": [{ "heading": string | null, "level": 1|2|3|4|5|6|null, "content": string }], "unresolved": string[], "notes": string[] }.',
       'Если поле не найдено, верни null.',
       'Если часть текста не удается уверенно классифицировать, помести ее в unresolved.',
       'Используй только текст из входных данных.',
@@ -461,27 +510,28 @@ export function buildIntakeBatchNormalizePrompt(input: {
 function normalizeSuggestionPayload(payload: unknown): IntakeAiSuggestion {
   const value = typeof payload === 'object' && payload ? payload : {};
   const record = value as Record<string, unknown>;
-  const sections = Array.isArray(record.sections)
-    ? record.sections
-        .map((entry) => {
-          if (!entry || typeof entry !== 'object') {
-            return undefined;
-          }
+  const sections: IntakeAiSuggestion['sections'] = [];
 
-          const section = entry as Record<string, unknown>;
-          const content = typeof section.content === 'string' ? section.content : '';
+  if (Array.isArray(record.sections)) {
+    for (const entry of record.sections) {
+      if (!entry || typeof entry !== 'object') {
+        continue;
+      }
 
-          if (!content.trim()) {
-            return undefined;
-          }
+      const section = entry as Record<string, unknown>;
+      const content = typeof section.content === 'string' ? section.content : '';
 
-          return {
-            heading: typeof section.heading === 'string' ? section.heading : null,
-            content,
-          };
-        })
-        .filter((entry): entry is { heading: string | null; content: string } => Boolean(entry))
-    : [];
+      if (!content.trim()) {
+        continue;
+      }
+
+      sections.push({
+        heading: typeof section.heading === 'string' ? section.heading : null,
+        level: parseHeadingLevel(section.level),
+        content,
+      });
+    }
+  }
 
   return {
     title: typeof record.title === 'string' ? record.title : null,

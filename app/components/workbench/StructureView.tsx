@@ -563,6 +563,7 @@ export function StructureView() {
                     id: `${page.id}-ai-${index + 1}`,
                     kind: 'richtext',
                     heading: section.heading ?? undefined,
+                    level: section.level ?? undefined,
                     content: section.content,
                   }))
                 : page.sections,

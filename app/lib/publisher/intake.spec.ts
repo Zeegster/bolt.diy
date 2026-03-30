@@ -526,11 +526,12 @@ Repeated heading.`,
     expect(prompt.user).toContain('meta preamble was low confidence');
 
     const suggestion = parseIntakeNormalizeOutput(
-      '```json\n{"title":"Bonus Page","description":"Secondary reference doc","h1":"Bonus Heading","sections":[{"heading":"Details","content":"Alpha"}],"unresolved":["tail"],"notes":["ok"]}\n```',
+      '```json\n{"title":"Bonus Page","description":"Secondary reference doc","h1":"Bonus Heading","sections":[{"heading":"Details","level":2,"content":"Alpha"}],"unresolved":["tail"],"notes":["ok"]}\n```',
     );
 
     expect(suggestion.title).toBe('Bonus Page');
     expect(suggestion.sections).toHaveLength(1);
+    expect(suggestion.sections[0]?.level).toBe(2);
     expect(suggestion.unresolved).toEqual(['tail']);
   });
 
@@ -582,6 +583,143 @@ Repeated heading.`,
       expect.arrayContaining(['_layouts/header.html', '_layouts/footer.html']),
     );
     expect(applied.referenceState.pageSourceMap[0]?.sourcePath).toBeTruthy();
+
+    const homeContentHtml = String(
+      applied.pages.find((page) => page.id === 'home')?.zones.content?.slots[0]?.props?.html ?? '',
+    );
+    expect(homeContentHtml).toContain('<h1>Home</h1>');
+    expect(homeContentHtml).toContain('<h2>Highlights</h2>');
+  });
+
+  it('preserves source heading level when rendering document sections', () => {
+    const sources: IntakeSourceSnapshot[] = [
+      markdownSource(
+        'content-source/policy.md',
+        `---
+title: Policy
+description: Policy details
+h1: Policy
+---
+
+# Policy
+
+## Rules
+
+Only source text.`,
+      ),
+    ];
+    const manifest = buildIntakeSourceManifest(sources, '/work/imports/policy-site');
+    const session = createIntakeSession({
+      id: 'session-policy',
+      sourceRoot: '/work/imports/policy-site',
+      importKind: 'document',
+      scenario: 'document-import',
+      activeContentFamily: 'document',
+      projectName: 'Policy Site',
+      sourceManifest: manifest,
+      pages: [
+        {
+          id: 'policy',
+          name: 'Policy',
+          sourcePath: 'content-source/policy.md',
+          sourceFamily: 'document',
+          role: 'article',
+          slug: 'policy',
+          path: '/policy/',
+          title: 'Policy',
+          description: 'Policy details',
+          h1: 'Policy',
+          sections: [
+            {
+              id: 'policy-rules',
+              kind: 'richtext',
+              heading: 'Rules',
+              level: 3,
+              content: 'Only source text.',
+            },
+          ],
+          checks: [],
+          warnings: [],
+          confidence: 0.9,
+        },
+      ],
+      warnings: [],
+    });
+
+    const applied = buildPublisherContractsFromIntakeSession(session);
+    const html = String(applied.pages[0]?.zones.content?.slots[0]?.props?.html ?? '');
+
+    expect(html).toContain('<h3>Rules</h3>');
+    expect(html).toContain('<p>Only source text.</p>');
+  });
+
+  it('normalizes section headings without level into deterministic heading tags', () => {
+    const sources: IntakeSourceSnapshot[] = [
+      markdownSource(
+        'content-source/fallback.md',
+        `---
+title: Fallback
+description: Fallback details
+h1: Fallback
+---
+
+# Fallback
+
+## Details
+
+Alpha`,
+      ),
+    ];
+    const manifest = buildIntakeSourceManifest(sources, '/work/imports/fallback-site');
+    const session = createIntakeSession({
+      id: 'session-fallback',
+      sourceRoot: '/work/imports/fallback-site',
+      importKind: 'document',
+      scenario: 'document-import',
+      activeContentFamily: 'document',
+      projectName: 'Fallback Site',
+      sourceManifest: manifest,
+      pages: [
+        {
+          id: 'fallback',
+          name: 'Fallback',
+          sourcePath: 'content-source/fallback.md',
+          sourceFamily: 'document',
+          role: 'article',
+          slug: 'fallback',
+          path: '/fallback/',
+          title: 'Fallback',
+          description: 'Fallback details',
+          h1: 'Fallback',
+          sections: [
+            {
+              id: 'fallback-main',
+              kind: 'richtext',
+              heading: 'Fallback',
+              content: 'Main copy.',
+            },
+            {
+              id: 'fallback-details',
+              kind: 'richtext',
+              heading: 'Details',
+              content: 'Alpha.',
+            },
+          ],
+          checks: [],
+          warnings: [],
+          confidence: 0.9,
+        },
+      ],
+      warnings: [],
+    });
+
+    const applied = buildPublisherContractsFromIntakeSession(session);
+    const html = String(applied.pages[0]?.zones.content?.slots[0]?.props?.html ?? '');
+
+    expect(html).toContain('<h1>Fallback</h1>');
+    expect(html).toContain('<h2>Details</h2>');
+    expect(html).toContain('<p>Main copy.</p>');
+    expect(html).toContain('<p>Alpha.</p>');
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {

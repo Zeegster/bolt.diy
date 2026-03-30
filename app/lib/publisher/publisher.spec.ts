@@ -13,6 +13,7 @@ import { buildPromptForRepairIntent, deriveRepairIntentFromCheck } from './agent
 import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
+import { publisherTemplates } from './templates';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
 import {
   buildPageRegeneratePrompt,
@@ -232,6 +233,12 @@ function createPublisherFiles(): FileMap {
 }
 
 describe('publisher workflow', () => {
+  it('keeps block templates heading-free', () => {
+    const combinedTemplates = Object.values(publisherTemplates).join('\n').toLowerCase();
+
+    expect(combinedTemplates).not.toMatch(/<h[1-6][\s>]/);
+  });
+
   it('loads project contracts from reserved files', () => {
     const state = loadPublisherState(createPublisherFiles());
 

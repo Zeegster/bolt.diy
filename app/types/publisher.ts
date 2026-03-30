@@ -291,6 +291,7 @@ export interface IntakeSession {
 
 export interface IntakeAiSectionSuggestion {
   heading: string | null;
+  level?: 1 | 2 | 3 | 4 | 5 | 6 | null;
   content: string;
 }
 

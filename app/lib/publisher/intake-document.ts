@@ -495,7 +495,7 @@ function parseDocumentAst(text: string): ParsedDocumentAst {
 function renderBlocksToSections(blocks: DocumentAstBlock[], baseId: string, meta: ParsedDocumentMeta) {
   const sections: IntakeSectionDraft[] = [];
   let currentHeading: string | undefined;
-  let currentLevel: 2 | 3 | 4 | 5 | 6 | undefined;
+  let currentLevel: 1 | 2 | 3 | 4 | 5 | 6 | undefined;
   let currentContent: string[] = [];
   let primaryHeading = meta.h1;
 
@@ -535,12 +535,11 @@ function renderBlocksToSections(blocks: DocumentAstBlock[], baseId: string, meta
 
       if (block.level === 1 && !meta.h1) {
         primaryHeading = block.text;
-        continue;
       }
 
       pushCurrent();
       currentHeading = block.text;
-      currentLevel = block.level && block.level >= 2 ? (block.level as 2 | 3 | 4 | 5 | 6) : 2;
+      currentLevel = block.level && block.level >= 1 && block.level <= 6 ? block.level : undefined;
       continue;
     }
 

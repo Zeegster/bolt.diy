@@ -218,7 +218,7 @@ function buildSectionTextFromBlocks(blocks: string[]) {
 function collectSectionsFromRoot(root: Element, baseId: string, titleState: { h1?: string }) {
   const sections: IntakeSectionDraft[] = [];
   let currentHeading: string | undefined;
-  let currentLevel: 2 | 3 | 4 | 5 | 6 | undefined;
+  let currentLevel: 1 | 2 | 3 | 4 | 5 | 6 | undefined;
   let currentContent: string[] = [];
 
   const pushCurrent = () => {
@@ -267,7 +267,6 @@ function collectSectionsFromRoot(root: Element, baseId: string, titleState: { h1
 
       if (level === 1 && !titleState.h1) {
         titleState.h1 = text;
-        continue;
       }
 
       if (!titleState.h1) {
@@ -276,7 +275,7 @@ function collectSectionsFromRoot(root: Element, baseId: string, titleState: { h1
 
       pushCurrent();
       currentHeading = text;
-      currentLevel = level && level >= 2 ? (level as 2 | 3 | 4 | 5 | 6) : 2;
+      currentLevel = level && level >= 1 && level <= 6 ? (level as 1 | 2 | 3 | 4 | 5 | 6) : undefined;
       continue;
     }
 
