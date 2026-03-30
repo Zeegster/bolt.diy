@@ -4,12 +4,22 @@ function trimTrailingSlash(value: string) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
-export function buildAbsoluteUrl(path: string, siteUrl?: string) {
+export function normalizeSiteUrl(siteUrl?: string) {
   if (!siteUrl?.trim()) {
     return undefined;
   }
 
-  return new URL(path, trimTrailingSlash(siteUrl)).toString();
+  return trimTrailingSlash(siteUrl.trim());
+}
+
+export function buildAbsoluteUrl(path: string, siteUrl?: string) {
+  const normalizedSiteUrl = normalizeSiteUrl(siteUrl);
+
+  if (!normalizedSiteUrl) {
+    return undefined;
+  }
+
+  return new URL(path, normalizedSiteUrl).toString();
 }
 
 export function buildCanonicalUrl(page: Pick<PageContract, 'path' | 'seo'>, siteUrl?: string) {
@@ -19,6 +29,7 @@ export function buildCanonicalUrl(page: Pick<PageContract, 'path' | 'seo'>, site
 export function buildSchemaJson(state: LoadedPublisherState, page: PageContract) {
   const siteUrl = state.project?.siteUrl ?? (state.project?.domain ? `https://${state.project.domain}` : undefined);
   const schemaType = page.seo.schemaType ?? 'WebPage';
+  const canonicalPath = page.seo.canonicalPath ?? page.path;
 
   return JSON.stringify(
     {
@@ -26,7 +37,7 @@ export function buildSchemaJson(state: LoadedPublisherState, page: PageContract)
       '@type': schemaType,
       name: page.seo.title,
       description: page.seo.description,
-      url: buildAbsoluteUrl(page.path, siteUrl),
+      url: buildAbsoluteUrl(canonicalPath, siteUrl),
       inLanguage: state.project?.defaultLanguage ?? 'en',
       breadcrumb:
         state.pages.length > 1 && siteUrl
@@ -44,6 +55,38 @@ export function buildSchemaJson(state: LoadedPublisherState, page: PageContract)
     null,
     2,
   );
+}
+
+export function buildExpectedSitemapUrl(siteUrl?: string) {
+  const normalizedSiteUrl = normalizeSiteUrl(siteUrl);
+
+  if (!normalizedSiteUrl) {
+    return '/sitemap.xml';
+  }
+
+  return `${normalizedSiteUrl}/sitemap.xml`;
+}
+
+export function parseRobotsSitemapUrl(robotsTxt: string) {
+  const line = robotsTxt
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .find((value) => value.toLowerCase().startsWith('sitemap:'));
+
+  if (!line) {
+    return undefined;
+  }
+
+  const value = line.slice(line.indexOf(':') + 1).trim();
+  return value.length > 0 ? value : undefined;
+}
+
+export function extractSitemapLocations(sitemapXml: string) {
+  const matches = sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g);
+
+  return [...matches]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
 }
 
 export function buildPageHeadMetadata(
@@ -94,9 +137,7 @@ export function buildSiteManifest(state: LoadedPublisherState, faviconHref?: str
 }
 
 export function buildRobotsTxt(state: LoadedPublisherState) {
-  const sitemapUrl = state.project?.siteUrl
-    ? `${trimTrailingSlash(state.project.siteUrl)}/sitemap.xml`
-    : '/sitemap.xml';
+  const sitemapUrl = buildExpectedSitemapUrl(state.project?.siteUrl);
   return `User-agent: *\nAllow: /\nSitemap: ${sitemapUrl}\n`;
 }
 

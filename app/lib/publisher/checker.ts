@@ -1,7 +1,16 @@
 import { type CheckReport, type LoadedPublisherState, type PageContract, type SlotContract } from '~/types/publisher';
 import type { PublisherBlockRegistry } from './block-registry';
 import { resolveEffectiveZoneContract, validatePublisherContractGuards } from './contracts';
-import { buildCanonicalUrl, buildSitemapXml, hasCompleteSeo } from './metadata';
+import {
+  buildCanonicalUrl,
+  buildExpectedSitemapUrl,
+  buildRobotsTxt,
+  buildSchemaJson,
+  buildSitemapXml,
+  extractSitemapLocations,
+  hasCompleteSeo,
+  parseRobotsSitemapUrl,
+} from './metadata';
 import { normalizeTokens } from './token-engine';
 import { hasNavigationTag } from './validator';
 
@@ -39,6 +48,44 @@ function isKnownInternalHref(value: string, knownPaths: Set<string>) {
   return knownPaths.has(normalizePath(value.split('#')[0]));
 }
 
+function isUnsafeHref(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('javascript:') || normalized.startsWith('data:text/html');
+}
+
+function isExplicitExternalHref(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.startsWith('http://') ||
+    normalized.startsWith('https://') ||
+    normalized.startsWith('mailto:') ||
+    normalized.startsWith('tel:') ||
+    normalized.startsWith('#')
+  );
+}
+
+function isManagedAssetPublicPath(value: string) {
+  return value.startsWith('/assets/');
+}
+
+function collectManagedAssetPublicPaths(state: LoadedPublisherState) {
+  const assetPaths = new Set<string>();
+
+  [state.project?.favicon, state.project?.metaImage, state.project?.logo].forEach((assetRef) => {
+    if (assetRef?.publicPath) {
+      assetPaths.add(assetRef.publicPath);
+    }
+  });
+
+  state.referenceState?.assetMaterialization.forEach((asset) => {
+    if (asset.publicPath) {
+      assetPaths.add(asset.publicPath);
+    }
+  });
+
+  return assetPaths;
+}
+
 export function runPublisherChecks(state: LoadedPublisherState, registry: PublisherBlockRegistry): CheckReport[] {
   const reports: CheckReport[] = [
     ...state.issues,
@@ -46,6 +93,7 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
     ...validatePublisherContractGuards(state, registry),
   ];
   const themeTokens = normalizeTokens(state.theme);
+  const managedAssetPublicPaths = collectManagedAssetPublicPaths(state);
 
   if (!state.project) {
     return [
@@ -118,6 +166,17 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
           status: 'fail',
           message: `Configured ${assetName} asset could not be found.`,
           details: [assetRef.path],
+        }),
+      );
+    }
+
+    if (assetRef.publicPath && !isManagedAssetPublicPath(assetRef.publicPath)) {
+      reports.push(
+        createReleaseReport({
+          name: 'project-asset-policy',
+          status: 'warn',
+          message: `Project ${assetName} uses a non-managed public asset path.`,
+          details: [assetRef.publicPath, 'Prefer /assets/* paths so release output remains deterministic.'],
         }),
       );
     }
@@ -244,6 +303,39 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
             );
           }
 
+          if ((loweredKey.includes('href') || loweredKey.includes('link')) && isUnsafeHref(value)) {
+            reports.push(
+              createReleaseReport({
+                name: 'link-policy',
+                status: 'fail',
+                message: `Block "${block.name}" uses an unsafe link protocol.`,
+                details: [`${page.name}/${slot.id}/${key}: ${value}`],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
+          if (
+            (loweredKey.includes('href') || loweredKey.includes('link')) &&
+            !isInternalHref(value) &&
+            !isExplicitExternalHref(value)
+          ) {
+            reports.push(
+              createReleaseReport({
+                name: 'link-format',
+                status: 'warn',
+                message: `Block "${block.name}" uses an ambiguous link format.`,
+                details: [
+                  `${page.name}/${slot.id}/${key}: ${value}`,
+                  'Use internal links starting with "/" or explicit external protocols (https://, mailto:, tel:).',
+                ],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
           if (
             (loweredKey.includes('image') || loweredKey.includes('logo')) &&
             !value.startsWith('/assets/') &&
@@ -255,6 +347,43 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
                 status: 'warn',
                 message: `Block "${block.name}" uses an image reference outside the managed asset conventions.`,
                 details: [`${page.name}/${slot.id}/${key}: ${value}`],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
+          if ((loweredKey.includes('image') || loweredKey.includes('logo')) && value.startsWith('/.bolt/publisher/')) {
+            reports.push(
+              createReleaseReport({
+                name: 'managed-asset-internal-path',
+                status: 'fail',
+                message: `Block "${block.name}" leaks an internal publisher asset path into output.`,
+                details: [
+                  `${page.name}/${slot.id}/${key}: ${value}`,
+                  'Use the public /assets/* path instead of internal .bolt paths.',
+                ],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
+          if (
+            (loweredKey.includes('image') || loweredKey.includes('logo')) &&
+            isManagedAssetPublicPath(value) &&
+            managedAssetPublicPaths.size > 0 &&
+            !managedAssetPublicPaths.has(value)
+          ) {
+            reports.push(
+              createReleaseReport({
+                name: 'managed-asset-reference',
+                status: 'warn',
+                message: `Block "${block.name}" references an unmanaged public asset.`,
+                details: [
+                  `${page.name}/${slot.id}/${key}: ${value}`,
+                  'Confirm this path is intentionally materialized by the publisher pipeline.',
+                ],
                 pageId: page.id,
                 zone,
               }),
@@ -315,6 +444,59 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
         }),
       );
     }
+
+    if (state.project.siteUrl && canonicalUrl) {
+      try {
+        const schema = JSON.parse(buildSchemaJson(state, page)) as Record<string, unknown>;
+        const schemaUrl = typeof schema.url === 'string' ? schema.url : undefined;
+        const schemaType = typeof schema['@type'] === 'string' ? schema['@type'] : undefined;
+        const expectedSchemaType = page.seo.schemaType ?? 'WebPage';
+
+        if (!schemaUrl) {
+          reports.push(
+            createReleaseReport({
+              name: 'schema-url',
+              status: 'fail',
+              message: `Page "${page.name}" schema is missing a URL field.`,
+              details: ['Generated schema JSON-LD must include absolute url matching canonical output.'],
+              pageId: page.id,
+            }),
+          );
+        } else if (schemaUrl !== canonicalUrl) {
+          reports.push(
+            createReleaseReport({
+              name: 'schema-canonical-consistency',
+              status: 'fail',
+              message: `Page "${page.name}" schema URL does not match canonical URL.`,
+              details: [schemaUrl, canonicalUrl],
+              pageId: page.id,
+            }),
+          );
+        }
+
+        if (schemaType !== expectedSchemaType) {
+          reports.push(
+            createReleaseReport({
+              name: 'schema-type-consistency',
+              status: 'warn',
+              message: `Page "${page.name}" schema type drifted from SEO contract.`,
+              details: [schemaType ?? 'undefined', expectedSchemaType],
+              pageId: page.id,
+            }),
+          );
+        }
+      } catch {
+        reports.push(
+          createReleaseReport({
+            name: 'schema-json',
+            status: 'fail',
+            message: `Page "${page.name}" generated invalid schema JSON-LD.`,
+            details: ['Inspect metadata generator output before publish.'],
+            pageId: page.id,
+          }),
+        );
+      }
+    }
   }
 
   const usedTokenKeys = new Set<string>();
@@ -342,6 +524,7 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
   }
 
   const sitemapXml = buildSitemapXml(state);
+  const robotsTxt = buildRobotsTxt(state);
 
   if (state.project.siteUrl && !sitemapXml.includes('<url><loc>')) {
     reports.push(
@@ -352,6 +535,66 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
         details: ['Check robots directives and page registration before publish.'],
       }),
     );
+  }
+
+  if (state.project.siteUrl) {
+    const robotsSitemapUrl = parseRobotsSitemapUrl(robotsTxt);
+    const expectedSitemapUrl = buildExpectedSitemapUrl(state.project.siteUrl);
+
+    if (!robotsSitemapUrl || robotsSitemapUrl !== expectedSitemapUrl) {
+      reports.push(
+        createReleaseReport({
+          name: 'robots-sitemap-url',
+          status: 'fail',
+          message: 'robots.txt sitemap directive does not match release siteUrl.',
+          details: [`actual: ${robotsSitemapUrl ?? 'missing'}`, `expected: ${expectedSitemapUrl}`],
+        }),
+      );
+    }
+
+    const sitemapLocations = new Set(extractSitemapLocations(sitemapXml));
+    const expectedIndexedUrls = new Set<string>();
+    const expectedNoindexUrls = new Set<string>();
+
+    state.pages.forEach((page) => {
+      const canonicalUrl = buildCanonicalUrl(page, state.project?.siteUrl);
+
+      if (!canonicalUrl) {
+        return;
+      }
+
+      if (page.seo.robots?.toLowerCase().includes('noindex')) {
+        expectedNoindexUrls.add(canonicalUrl);
+      } else {
+        expectedIndexedUrls.add(canonicalUrl);
+      }
+    });
+
+    const missingIndexedUrls = [...expectedIndexedUrls].filter((url) => !sitemapLocations.has(url));
+
+    if (missingIndexedUrls.length > 0) {
+      reports.push(
+        createReleaseReport({
+          name: 'sitemap-canonical-consistency',
+          status: 'fail',
+          message: 'Sitemap is missing canonical URLs for indexable pages.',
+          details: missingIndexedUrls,
+        }),
+      );
+    }
+
+    const leakedNoindexUrls = [...expectedNoindexUrls].filter((url) => sitemapLocations.has(url));
+
+    if (leakedNoindexUrls.length > 0) {
+      reports.push(
+        createReleaseReport({
+          name: 'sitemap-noindex-leak',
+          status: 'fail',
+          message: 'Sitemap includes pages marked as noindex.',
+          details: leakedNoindexUrls,
+        }),
+      );
+    }
   }
 
   const workingFailures = countReports(reports, 'working', 'fail');
