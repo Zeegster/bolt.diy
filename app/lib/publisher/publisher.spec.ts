@@ -177,6 +177,13 @@ describe('publisher workflow', () => {
     expect(result.files['/home/project/.bolt/publisher/checks.json']).toContain('working-gate');
     expect(result.build.artifacts.length).toBeGreaterThan(0);
     expect(result.build.releaseFailures).toBe(0);
+    expect(result.pipeline.schemaVersion).toBe('1.0.0');
+    expect(result.pipeline.stageOrder).toEqual(['assemble', 'optimize', 'check', 'export']);
+    expect(result.pipeline.deliveryStage).toBe('export');
+    expect(result.pipeline.stages.map((stage) => stage.stage)).toEqual(['assemble', 'optimize', 'check', 'export']);
+    expect(result.pipeline.stages.every((stage) => stage.summary.length > 0)).toBe(true);
+    expect(result.pipeline.activeStage).toBe('export');
+    expect(result.pipeline.failedStage).toBeUndefined();
     expect(result.pipeline.jobs).toHaveLength(4);
     expect(result.pipeline.jobs.map((job) => job.stage)).toEqual(['assemble', 'optimize', 'check', 'export']);
     expect(result.pipeline.publishContract.canPublish).toBe(true);
@@ -211,7 +218,11 @@ describe('publisher workflow', () => {
     expect(result.build.releaseFailures).toBeGreaterThan(0);
     expect(result.pipeline.publishContract.canPublish).toBe(false);
     expect(result.pipeline.publishContract.publishBlockers.some((value) => value.includes('site-url'))).toBe(true);
+    expect(result.pipeline.failedStage).toBe('check');
+    expect(result.pipeline.activeStage).toBe('check');
+    expect(result.pipeline.stages.find((stage) => stage.stage === 'check')?.status).toBe('failed');
     expect(result.pipeline.jobs.find((job) => job.stage === 'check')?.status).toBe('failed');
+    expect(result.pipeline.stages.find((stage) => stage.stage === 'export')?.status).toBe('failed');
     expect(result.pipeline.jobs.find((job) => job.stage === 'export')?.status).toBe('failed');
   });
 
@@ -487,6 +498,52 @@ describe('publisher workflow', () => {
     expect(workflow.status).toBe('release-ready');
     expect(workflow.step).toBe('release');
     expect(workflow.nextAction).toContain('Inspect artifacts');
+  });
+
+  it('derives stage-aware workflow details from latest pipeline metadata', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const workflow = derivePublisherWorkflowState({
+      checks: [],
+      lastBuild: result.build,
+    });
+
+    expect(workflow.status).toBe('release-ready');
+    expect(workflow.releaseStage).toBe('export');
+    expect(workflow.releaseStageStatus).toBe('completed');
+    expect(workflow.releaseFailureStage).toBeUndefined();
+  });
+
+  it('derives failed workflow stage handoff from failed pipeline builds', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const workflow = derivePublisherWorkflowState({
+      checks: result.checks,
+      lastBuild: result.build,
+    });
+
+    expect(workflow.status).toBe('failed');
+    expect(workflow.releaseStage).toBe('check');
+    expect(workflow.releaseStageStatus).toBe('failed');
+    expect(workflow.releaseFailureStage).toBe('check');
   });
 
   it('derives failed workflow state from release blockers', () => {
