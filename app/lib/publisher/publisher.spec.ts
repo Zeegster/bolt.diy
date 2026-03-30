@@ -6,7 +6,10 @@ import { runPublisherChecks } from './checker';
 import { buildCanonicalUrl } from './metadata';
 import { derivePublisherWorkflowState } from './status';
 import { buildIntakePageChecks } from './intake';
+import { buildPublisherContractsFromIntakeSession } from './intake-pipeline';
 import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
+import { createPublisherAssetRef } from './file-helpers';
+import { normalizePublisherBuildSummary } from './persistence';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
 import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from './prompt-context';
 import type { FileMap } from '~/lib/stores/files';
@@ -169,9 +172,47 @@ describe('publisher workflow', () => {
       '<link rel="canonical" href="https://demo.example/"',
     );
     expect(result.files['/home/project/.bolt/publisher/generated/assets/css/main.css']).toContain('--color-primary');
+    expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"pageSourceMap"');
+    expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"artifacts"');
     expect(result.files['/home/project/.bolt/publisher/checks.json']).toContain('working-gate');
     expect(result.build.artifacts.length).toBeGreaterThan(0);
     expect(result.build.releaseFailures).toBe(0);
+    expect(result.pipeline.jobs).toHaveLength(4);
+    expect(result.pipeline.jobs.map((job) => job.stage)).toEqual(['assemble', 'optimize', 'check', 'export']);
+    expect(result.pipeline.publishContract.canPublish).toBe(true);
+    expect(result.pipeline.publishContract.publishBlockers).toEqual([]);
+    expect(JSON.parse(result.files['/home/project/.bolt/publisher/state.json']).latestBuild.pipeline.jobs).toHaveLength(
+      4,
+    );
+  });
+
+  it('blocks publish contract when release checks fail', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+
+    expect(result.build.releaseFailures).toBeGreaterThan(0);
+    expect(result.pipeline.publishContract.canPublish).toBe(false);
+    expect(result.pipeline.publishContract.publishBlockers.some((value) => value.includes('site-url'))).toBe(true);
+    expect(result.pipeline.jobs.find((job) => job.stage === 'check')?.status).toBe('failed');
+    expect(result.pipeline.jobs.find((job) => job.stage === 'export')?.status).toBe('failed');
   });
 
   it('surfaces invalid page JSON as issues', () => {
@@ -620,5 +661,114 @@ describe('publisher workflow', () => {
     expect(state?.editableFields.map((field) => field.key)).toContain('title');
     expect(state?.blockedFields.find((field) => field.key === 'canonicalUrl')?.reason).toBe('ownership');
     expect(state?.blockedFields.find((field) => field.key === 'customScript')?.reason).toBe('composition');
+  });
+
+  it('creates deterministic hashed asset refs with image metadata', () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const assetRef = createPublisherAssetRef('logo', 'Brand Logo.png', 'image/png', {
+      bytes,
+      width: 320,
+      height: 80,
+    });
+
+    expect(assetRef.path).toContain('/.bolt/publisher/assets/logo-brand-logo-');
+    expect(assetRef.publicPath).toContain('/assets/site/logo-brand-logo-');
+    expect(assetRef.contentHash).toMatch(/^a[0-9a-f]+$/);
+    expect(assetRef.width).toBe(320);
+    expect(assetRef.height).toBe(80);
+  });
+
+  it('preserves normalized asset materialization metadata in applied publisher contracts', () => {
+    const applied = buildPublisherContractsFromIntakeSession({
+      id: 'session-asset',
+      createdAt: '2026-03-30T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z',
+      sourceLabel: 'Imported docs',
+      sourceRoot: '/work/content',
+      importKind: 'document',
+      status: 'ready',
+      scenario: 'document-import',
+      activeContentFamily: 'document',
+      project: {
+        name: 'Demo',
+        domain: 'demo.example',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+        logo: {
+          kind: 'logo',
+          path: '/home/project/.bolt/publisher/assets/logo-demo-a123.svg',
+          publicPath: '/assets/site/logo-demo-a123.svg',
+          mimeType: 'image/svg+xml',
+          label: 'logo.svg',
+          contentHash: 'a123',
+          width: 320,
+          height: 80,
+        },
+      },
+      sources: [],
+      pages: [
+        {
+          id: 'home',
+          name: 'Home',
+          sourcePath: 'content/home.md',
+          sourceFamily: 'document',
+          role: 'home',
+          slug: 'home',
+          path: '/',
+          title: 'Home',
+          description: 'Demo home page',
+          h1: 'Home',
+          sections: [
+            {
+              id: 'section-1',
+              kind: 'paragraph',
+              content: 'Welcome to the demo site.',
+            },
+          ],
+          seo: undefined,
+          checks: [],
+          warnings: [],
+          confidence: 0.95,
+        },
+      ],
+      shellCandidatePaths: [],
+      blockLibraryPaths: [],
+      warnings: [],
+      checks: [],
+      scriptRuns: [],
+    });
+
+    expect(applied.project.logo?.contentHash).toBe('a123');
+    expect(applied.referenceState.assetMaterialization[0]?.contentHash).toBe('a123');
+    expect(applied.referenceState.assetMaterialization[0]?.width).toBe(320);
+    expect(applied.referenceState.assetMaterialization[0]?.height).toBe(80);
+  });
+
+  it('normalizes persisted build history artifacts for provenance-facing release UI', () => {
+    const normalized = normalizePublisherBuildSummary({
+      id: 'build-1',
+      createdAt: '2026-03-30T00:00:00.000Z',
+      status: 'release-ready',
+      stage: 'export',
+      workingFailures: 0,
+      releaseFailures: 0,
+      warningCount: 0,
+      artifacts: [
+        {
+          path: '/home/project/.bolt/publisher/generated/robots.txt',
+          contentType: 'txt',
+          fingerprint: 'b2',
+        },
+        {
+          path: '/home/project/.bolt/publisher/generated/provenance.json',
+          contentType: 'json',
+          fingerprint: 'b1',
+        },
+      ],
+    });
+
+    expect(normalized.artifacts[0]?.path).toContain('provenance.json');
+    expect(normalized.artifacts[1]?.path).toContain('robots.txt');
   });
 });

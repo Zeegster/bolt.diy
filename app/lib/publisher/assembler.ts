@@ -4,6 +4,7 @@ import {
   PUBLISHER_GENERATED_DIR,
   PUBLISHER_GENERATED_JS_FILE,
   PUBLISHER_MANIFEST_FILE,
+  PUBLISHER_PROVENANCE_FILE,
   PUBLISHER_ROBOTS_FILE,
   PUBLISHER_SITEMAP_FILE,
   PUBLISHER_STATE_FILE,
@@ -16,9 +17,13 @@ import type {
   CheckReport,
   LoadedPublisherState,
   PageContract,
+  PublisherJobStage,
   PublisherAssemblyResult,
   PublisherAgentContext,
   PublisherBuildArtifact,
+  PublisherPipelineResult,
+  PublisherPublishContract,
+  PublisherBuildProvenance,
   PublisherBuildSummary,
   PublisherJob,
   SlotContract,
@@ -315,6 +320,153 @@ function detectArtifactContentType(path: string): PublisherBuildArtifact['conten
   return 'asset';
 }
 
+function buildArtifactsFromFiles(files: Record<string, string>): PublisherBuildArtifact[] {
+  return Object.entries(files)
+    .map(([path, content]) => ({
+      path,
+      contentType: detectArtifactContentType(path),
+      fingerprint: fingerprintText(content),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function buildSourceFingerprint(state: LoadedPublisherState) {
+  const sourceSnapshot = {
+    project: state.project,
+    theme: state.theme,
+    pages: [...state.pages].sort((left, right) => left.id.localeCompare(right.id)),
+    issues: [...state.issues],
+    checks: [...state.checks],
+    availableFilePaths: [...state.availableFilePaths].sort(),
+    referenceState: state.referenceState
+      ? {
+          intakeSessionId: state.referenceState.intakeSessionId,
+          importKind: state.referenceState.importKind,
+          activeContentFamily: state.referenceState.activeContentFamily,
+          referenceSourceFamily: state.referenceState.referenceSourceFamily,
+          sourceRoot: state.referenceState.sourceRoot,
+          sourceLabel: state.referenceState.sourceLabel,
+          templateCandidatePath: state.referenceState.templateCandidatePath,
+          homePageCandidatePath: state.referenceState.homePageCandidatePath,
+          pageSourceMap: [...state.referenceState.pageSourceMap].sort((left, right) =>
+            left.pageId.localeCompare(right.pageId),
+          ),
+          assetMaterialization: [...state.referenceState.assetMaterialization].sort((left, right) =>
+            left.kind.localeCompare(right.kind),
+          ),
+        }
+      : undefined,
+  };
+
+  return fingerprintText(JSON.stringify(sourceSnapshot));
+}
+
+function buildArtifactFingerprint(artifacts: PublisherBuildArtifact[]) {
+  return fingerprintText(artifacts.map((artifact) => `${artifact.path}:${artifact.fingerprint}`).join('|'));
+}
+
+function buildPublishContract(
+  build: PublisherBuildSummary,
+  checks: CheckReport[],
+  state: LoadedPublisherState,
+): PublisherPublishContract {
+  const workingFailures = checks.filter((report) => report.gate === 'working' && report.status === 'fail').length;
+  const releaseFailures = checks.filter((report) => report.gate === 'release' && report.status === 'fail').length;
+  const publishBlockers = checks
+    .filter((report) => report.status === 'fail')
+    .map((report) => `${report.name}: ${report.message}`);
+  const publishWarnings = checks
+    .filter((report) => report.status === 'warn')
+    .map((report) => `${report.name}: ${report.message}`);
+
+  return {
+    schemaVersion: '1.0.0',
+    buildId: build.id,
+    projectId: build.projectId,
+    generatedAt: build.createdAt,
+    canPublish: workingFailures === 0 && releaseFailures === 0,
+    publishWarnings,
+    publishBlockers,
+    sourceFingerprint: buildSourceFingerprint(state),
+    artifactFingerprint: buildArtifactFingerprint(build.artifacts),
+    rollback: {
+      strategy: 'rebuild',
+      keepLastBuilds: 10,
+    },
+  };
+}
+
+function createPublishJob(
+  buildId: string,
+  stage: PublisherJobStage,
+  status: PublisherJob['status'],
+  details: string[],
+): PublisherJob {
+  const startedAt = new Date().toISOString();
+
+  return {
+    id: `${buildId}:${stage}`,
+    stage,
+    status,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    details,
+  };
+}
+
+function buildPublisherPipeline(
+  build: PublisherBuildSummary,
+  checks: CheckReport[],
+  state: LoadedPublisherState,
+): PublisherPipelineResult {
+  const checkFailCount = checks.filter((report) => report.status === 'fail').length;
+  const checkFailDetails = checks
+    .filter((report) => report.status === 'fail')
+    .map((check) => `${check.name}: ${check.message}`);
+  const checkWarnDetails = checks
+    .filter((report) => report.status === 'warn')
+    .map((check) => `${check.name}: ${check.message}`);
+  const workingFailures = checks.filter((report) => report.gate === 'working' && report.status === 'fail').length;
+  const releaseFailures = checks.filter((report) => report.gate === 'release' && report.status === 'fail').length;
+  const hasBlockers = workingFailures > 0 || releaseFailures > 0;
+
+  const assembleJob = createPublishJob(build.id, 'assemble', 'completed', [
+    'Contract-driven page assembly completed.',
+    `${state.pages.length} page contract(s) processed.`,
+    `${state.theme?.tokens ? Object.keys(state.theme.tokens).length : 0} token(s) applied to output templates.`,
+  ]);
+
+  const optimizeJob = createPublishJob(build.id, 'optimize', 'completed', [
+    'Output artifacts were normalized (canonical spacing + deterministic serialization).',
+    'No structural optimization transforms are currently required by this milestone.',
+  ]);
+
+  const checkJob = createPublishJob(
+    build.id,
+    'check',
+    hasBlockers ? 'failed' : 'completed',
+    hasBlockers
+      ? [...checkFailDetails, `Detected ${checkFailCount} release-blocking check report(s).`]
+      : ['All working and release checks passed.'],
+  );
+
+  const exportJob = createPublishJob(
+    build.id,
+    'export',
+    hasBlockers ? 'failed' : 'completed',
+    hasBlockers
+      ? [...checkWarnDetails, `Export blocked by ${checkFailCount} failed checks.`]
+      : ['Export artifact metadata emitted to generated/system files.', ...checkWarnDetails],
+  );
+
+  const pipeline: PublisherPipelineResult = {
+    jobs: [assembleJob, optimizeJob, checkJob, exportJob],
+    publishContract: buildPublishContract(build, checks, state),
+  };
+
+  return pipeline;
+}
+
 function buildPublisherSummary(
   projectId: string | undefined,
   checks: CheckReport[],
@@ -333,11 +485,28 @@ function buildPublisherSummary(
     workingFailures,
     releaseFailures,
     warningCount,
-    artifacts: Object.entries(files).map(([path, content]) => ({
-      path,
-      contentType: detectArtifactContentType(path),
-      fingerprint: fingerprintText(content),
-    })),
+    artifacts: buildArtifactsFromFiles(files),
+  };
+}
+
+function buildPublisherProvenance(
+  state: LoadedPublisherState,
+  files: Record<string, string>,
+): PublisherBuildProvenance {
+  return {
+    projectId: state.project?.id,
+    importKind: state.referenceState?.importKind,
+    sourceRoot: state.referenceState?.sourceRoot,
+    sourceLabel: state.referenceState?.sourceLabel,
+    templateCandidatePath: state.referenceState?.templateCandidatePath,
+    homePageCandidatePath: state.referenceState?.homePageCandidatePath,
+    pageSourceMap: [...(state.referenceState?.pageSourceMap ?? [])].sort((left, right) =>
+      left.pageId.localeCompare(right.pageId),
+    ),
+    assetMaterialization: [...(state.referenceState?.assetMaterialization ?? [])].sort((left, right) =>
+      left.kind.localeCompare(right.kind),
+    ),
+    artifacts: buildPublisherSummary(state.project?.id, [], files).artifacts,
   };
 }
 
@@ -376,22 +545,30 @@ export function assemblePublisherProject(
   context: PublisherAgentContext = { mode: 'publisher' },
 ): PublisherAssemblyResult {
   const checks = runPublisherChecks(state, registry);
+  const checksFile = JSON.stringify(checks, null, 2);
 
   if (!state.project) {
     const build = buildPublisherSummary(undefined, checks, {
-      [PUBLISHER_CHECKS_FILE]: JSON.stringify(checks, null, 2),
+      [PUBLISHER_CHECKS_FILE]: checksFile,
     });
+    const pipeline = buildPublisherPipeline(build, checks, state);
+    build.pipeline = pipeline;
+
+    const files = {
+      [PUBLISHER_CHECKS_FILE]: checksFile,
+      [PUBLISHER_STATE_FILE]: buildPublisherStateFile(undefined, checks, context, build),
+    };
+
     return {
-      files: {
-        [PUBLISHER_CHECKS_FILE]: JSON.stringify(checks, null, 2),
-      },
+      files,
       checks,
       build,
+      pipeline,
     };
   }
 
   const files: Record<string, string> = {
-    [PUBLISHER_CHECKS_FILE]: JSON.stringify(checks, null, 2),
+    [PUBLISHER_CHECKS_FILE]: checksFile,
     [PUBLISHER_GENERATED_CSS_FILE]: buildMainCss(state),
     [PUBLISHER_GENERATED_JS_FILE]: buildMainJs(),
     [PUBLISHER_MANIFEST_FILE]: buildManifest(state),
@@ -405,8 +582,12 @@ export function assemblePublisherProject(
     files[targetPath] = buildPageHtml(state, page, registry);
   });
 
+  files[PUBLISHER_PROVENANCE_FILE] = JSON.stringify(buildPublisherProvenance(state, files), null, 2);
+
   const build = buildPublisherSummary(state.project.id, checks, files);
+  const pipeline = buildPublisherPipeline(build, checks, state);
+  build.pipeline = pipeline;
   files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project.id, checks, context, build);
 
-  return { files, checks, build };
+  return { files, checks, build, pipeline };
 }
