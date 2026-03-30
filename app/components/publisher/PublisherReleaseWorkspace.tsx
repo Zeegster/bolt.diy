@@ -64,9 +64,15 @@ function derivePipelineStages(build?: PublisherBuildSummary): PublisherPipelineS
   }
 
   const legacyJobs = build?.pipeline?.jobs ?? [];
+  const releaseLegacyJobs = legacyJobs.filter(
+    (
+      job,
+    ): job is (typeof legacyJobs)[number] & {
+      stage: PublisherReleasePipelineStage;
+    } => isReleasePipelineStage(job.stage),
+  );
 
-  return legacyJobs
-    .filter((job) => isReleasePipelineStage(job.stage))
+  return releaseLegacyJobs
     .map((job) => ({
       stage: job.stage,
       status: job.status === 'idle' ? 'pending' : job.status,
