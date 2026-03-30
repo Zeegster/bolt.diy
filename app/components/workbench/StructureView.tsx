@@ -34,6 +34,7 @@ import { buildIntakePageChecks, buildIntakeSessionChecks } from '~/lib/publisher
 import { normalizeIntakePageWithProvider, normalizeIntakePagesWithProvider } from '~/lib/publisher/intake-ai';
 import { buildImportedBundleAdapter } from '~/lib/publisher/intake-adapter';
 import { buildPromptForRepairIntent } from '~/lib/publisher/agent-model';
+import { createPublisherOrchestrationEnvelope, type PublisherOrchestrationAction } from '~/lib/publisher/orchestration';
 import {
   buildIntakeAiBatchPageInput,
   buildPublisherContractsFromIntakeSession,
@@ -387,6 +388,23 @@ export function StructureView() {
       zone: intentZone,
       blockId: 'slotId' in intent ? intent.slotId : undefined,
     });
+  };
+
+  const handleRunOrchestrationAction = async (action: PublisherOrchestrationAction) => {
+    const envelope = createPublisherOrchestrationEnvelope(action, {
+      qualityExtensions:
+        action.action === 'publish-export' ? [{ kind: 'lighthouse', profile: 'mobile', optional: true }] : [],
+    });
+
+    if (
+      action.action === 'rebuild-preview' ||
+      action.action === 'run-release-checks' ||
+      action.action === 'publish-export'
+    ) {
+      await rebuildPreview(action.action === 'rebuild-preview' ? action.pageId : undefined);
+    }
+
+    toast.info(`Publisher orchestration ready: ${envelope.action.action}`);
   };
 
   const openFile = (filePath: string) => {
@@ -1001,6 +1019,9 @@ export function StructureView() {
       onOpenSitemap={() => openFile(PUBLISHER_SITEMAP_FILE)}
       onOpenRobots={() => openFile(PUBLISHER_ROBOTS_FILE)}
       onQueueRepairIntent={handleQueueRepairIntent}
+      onRunOrchestrationAction={(action) => {
+        void handleRunOrchestrationAction(action);
+      }}
       onOpenContract={(page: PageContract) => openFile(getPublisherPageFilePath(page.slug))}
       onNormalizeWithAi={(page: PageContract) => {
         prefillPrompt(buildNormalizePrompt(page.id), { pageId: page.id });

@@ -18,6 +18,7 @@ import { describePublisherSlotEditing } from '~/lib/publisher/contracts';
 import { IntakePageEditor } from './IntakePageEditor';
 import { IntakePageNavigator } from './IntakePageNavigator';
 import { PublisherReleaseWorkspace } from './PublisherReleaseWorkspace';
+import type { PublisherOrchestrationAction } from '~/lib/publisher/orchestration';
 import { IntakeSourcePane } from './IntakeSourcePane';
 import { PublisherSiteSettingsEditor, type PublisherSiteSettingsSubmitPayload } from './PublisherSiteSettingsEditor';
 import {
@@ -62,6 +63,7 @@ interface PublisherIntakeWorkspaceProps {
   onOpenSitemap?: () => void;
   onOpenRobots?: () => void;
   onQueueRepairIntent?: (payload: { intent: PublisherAgentActionContract; check: CheckReport }) => void;
+  onRunOrchestrationAction?: (action: PublisherOrchestrationAction) => void;
   busySettings?: boolean;
 }
 
@@ -133,6 +135,7 @@ export function PublisherIntakeWorkspace({
   onOpenSitemap,
   onOpenRobots,
   onQueueRepairIntent,
+  onRunOrchestrationAction,
   busySettings,
 }: PublisherIntakeWorkspaceProps) {
   const [drafts, setDrafts] = useState<Record<string, IntakePageDraft>>(() =>
@@ -221,7 +224,13 @@ export function PublisherIntakeWorkspace({
             </span>
             <button
               type="button"
-              onClick={onRebuildPreview}
+              onClick={() => {
+                if (project?.id && onRunOrchestrationAction) {
+                  onRunOrchestrationAction({ action: 'rebuild-preview', projectId: project.id });
+                }
+
+                onRebuildPreview();
+              }}
               className="rounded-lg bg-accent-500/15 px-3 py-2 text-sm text-accent-300 hover:bg-accent-500/20"
             >
               Rebuild preview
@@ -324,7 +333,13 @@ export function PublisherIntakeWorkspace({
                 </button>
                 <button
                   type="button"
-                  onClick={onRebuildPreview}
+                  onClick={() => {
+                    if (project?.id && onRunOrchestrationAction) {
+                      onRunOrchestrationAction({ action: 'rebuild-preview', projectId: project.id });
+                    }
+
+                    onRebuildPreview();
+                  }}
                   className="rounded-lg border border-accent-500/20 bg-accent-500/10 px-3 py-2 text-xs text-accent-300 hover:bg-accent-500/20"
                 >
                   Rebuild
@@ -393,6 +408,8 @@ export function PublisherIntakeWorkspace({
               onOpenSitemap={onOpenSitemap}
               onOpenRobots={onOpenRobots}
               onQueueRepairIntent={onQueueRepairIntent}
+              onRunOrchestrationAction={onRunOrchestrationAction}
+              projectId={project?.id}
             />
           </div>
 

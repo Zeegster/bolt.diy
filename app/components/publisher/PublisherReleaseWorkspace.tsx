@@ -10,6 +10,7 @@ import {
 } from '~/types/publisher';
 import { deriveRepairIntentFromCheck } from '~/lib/publisher/agent-model';
 import { categorizePublisherDiagnostic, getPublisherDiagnosticLabel } from '~/lib/publisher/intake-ui';
+import type { PublisherOrchestrationAction } from '~/lib/publisher/orchestration';
 
 const statusOrder: PublisherProjectStatus[] = [
   'draft',
@@ -181,6 +182,8 @@ interface PublisherReleaseWorkspaceProps {
   onOpenSitemap?: () => void;
   onOpenRobots?: () => void;
   onQueueRepairIntent?: (payload: { intent: PublisherAgentActionContract; check: CheckReport }) => void;
+  onRunOrchestrationAction?: (action: PublisherOrchestrationAction) => void;
+  projectId?: string;
 }
 
 export function PublisherReleaseWorkspace({
@@ -195,6 +198,8 @@ export function PublisherReleaseWorkspace({
   onOpenSitemap,
   onOpenRobots,
   onQueueRepairIntent,
+  onRunOrchestrationAction,
+  projectId,
 }: PublisherReleaseWorkspaceProps) {
   const latestBuild = buildHistory[0];
   const releaseChecks = checks.filter((check) => check.gate === 'release');
@@ -447,6 +452,25 @@ export function PublisherReleaseWorkspace({
       <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
         Repair actions require operator confirmation before prompt prefill.
       </div>
+
+      {onRunOrchestrationAction && projectId ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => onRunOrchestrationAction({ action: 'run-release-checks', projectId })}
+            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3"
+          >
+            Queue release checks
+          </button>
+          <button
+            type="button"
+            onClick={() => onRunOrchestrationAction({ action: 'publish-export', projectId })}
+            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3"
+          >
+            Queue publish/export
+          </button>
+        </div>
+      ) : null}
 
       {groupedPanels.length > 0 ? (
         <div className="mt-4 space-y-4">
