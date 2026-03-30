@@ -69,6 +69,10 @@ export function listIntakeSessions() {
     .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
 }
 
+export function listIntakeSessionsByUpdatedAtDesc() {
+  return [...listIntakeSessions()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 export function saveIntakeSession(session: IntakeSession) {
   const current = loadSessionMap();
   const updatedAt = new Date().toISOString();

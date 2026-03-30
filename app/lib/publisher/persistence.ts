@@ -92,6 +92,27 @@ function loadAllProjects(): PersistedPublisherMap {
   }
 }
 
+export function listPublisherProjectStates() {
+  return Object.entries(loadAllProjects())
+    .map(([projectId, state]) => ({
+      projectId,
+      state: {
+        ...state,
+        buildHistory: state.buildHistory?.map(normalizePublisherBuildSummary) ?? [],
+      },
+    }))
+    .sort((left, right) => {
+      const leftUpdatedAt = left.state.lastBuildAt ?? left.state.buildHistory?.[0]?.createdAt ?? '';
+      const rightUpdatedAt = right.state.lastBuildAt ?? right.state.buildHistory?.[0]?.createdAt ?? '';
+
+      if (leftUpdatedAt !== rightUpdatedAt) {
+        return rightUpdatedAt.localeCompare(leftUpdatedAt);
+      }
+
+      return left.projectId.localeCompare(right.projectId);
+    });
+}
+
 function saveAllProjects(nextState: PersistedPublisherMap) {
   if (!canUseStorage()) {
     return;
