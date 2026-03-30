@@ -36,14 +36,14 @@
 - [ ] **BUILD-01**: Output is assembled only from approved contracts through a one-way generation path.
 - [ ] **BUILD-02**: Generated files use normalized public paths and stable file mapping.
 - [ ] **BUILD-03**: Asset ingestion normalizes names, hashes duplicates, and captures dimensions needed for rendering and image policy checks.
-- [ ] **BUILD-04**: Build pipeline supports a distinct optimize/check stage after assembly.
+- [x] **BUILD-04**: Build pipeline supports a distinct optimize/check stage after assembly.
 
 ### Operator Workflow
 
 - [x] **OPER-01**: UI exposes a clear project status machine: `draft -> intake-review -> contract-ready -> release-ready -> published -> failed`.
 - [x] **OPER-02**: Operator can see grouped `working` and `release` diagnostics with severity and actionable detail.
 - [x] **OPER-03**: Operator can inspect the relationship between source, contracts, and generated output during review.
-- [ ] **OPER-04**: Operator can access build history, generated entry points, and release readiness in one workflow.
+- [x] **OPER-04**: Operator can access build history, generated entry points, and release readiness in one workflow.
 
 ### Agent Layer
 
@@ -108,11 +108,11 @@
 | BUILD-01 | Phase 3 | Pending |
 | BUILD-02 | Phase 3 | Pending |
 | BUILD-03 | Phase 3 | Pending |
-| BUILD-04 | Phase 4 | Pending |
+| BUILD-04 | Phase 4 | Complete |
 | OPER-01 | Phase 2 | Complete |
 | OPER-02 | Phase 2 | Complete |
 | OPER-03 | Phase 2 | Complete |
-| OPER-04 | Phase 4 | Pending |
+| OPER-04 | Phase 4 | Complete |
 | AGNT-01 | Phase 5 | Pending |
 | AGNT-02 | Phase 5 | Pending |
 | AGNT-03 | Phase 5 | Pending |
