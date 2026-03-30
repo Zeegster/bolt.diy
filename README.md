@@ -106,6 +106,16 @@ project, please check the [project management guide](./PROJECT.md) to get starte
 - **Integration-ready Docker support** for a hassle-free setup.
 - **Deploy** directly to **Netlify**
 
+## Publisher Mode Contracts
+
+Publisher Mode uses a strict contract boundary so generated sites stay deterministic and reviewable.
+
+- Required zones are `header`, `content`, and `footer`. Optional zones are `beforeContent`, `afterContent`, and `sidebar`.
+- Registry entries are normalized before validation, so legacy manifests still resolve effective `schemaVersion`, allowed zones, and deprecation metadata.
+- Block placement must respect registry zone rules and required slot props before output is trusted.
+- App-owned metadata stays outside block slot props. Reserved ownership includes `canonical`, `robots`, `schema`, `schemaType`, `jsonLd`, `favicon`, `metaImage`, and raw `head` payloads.
+- Page and project contracts remain the only valid sources for canonical URLs, robots directives, JSON-LD, and other `<head>` concerns.
+
 ## Setup
 
 If you're new to installing software from GitHub, don't worry! If you encounter any issues, feel free to submit an "issue" using the provided links or improve this documentation by forking the repository, editing the instructions, and submitting a pull request. The following instruction will help you get the stable branch up and running on your local machine in no time.

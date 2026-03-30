@@ -573,7 +573,7 @@ export class FilesStore {
     }
   }
 
-  async saveFile(filePath: string, content: string, options: { trackModification?: boolean } = {}) {
+  async saveFile(filePath: string, content: string | Uint8Array, options: { trackModification?: boolean } = {}) {
     const webcontainer = await this.#webcontainer;
     const trackModification = options.trackModification ?? true;
 
@@ -590,7 +590,10 @@ export class FilesStore {
         unreachable('Expected content to be defined');
       }
 
-      await webcontainer.fs.writeFile(relativePath, content);
+      const isBinary = content instanceof Uint8Array;
+      const contentToWrite = isBinary ? Buffer.from(content) : content;
+
+      await webcontainer.fs.writeFile(relativePath, contentToWrite);
 
       if (trackModification) {
         this.#trackFileModification(filePath, oldContent);
@@ -603,7 +606,11 @@ export class FilesStore {
       const isLocked = currentFile?.type === 'file' ? currentFile.isLocked : false;
 
       // we immediately update the file and don't rely on the `change` event coming from the watcher
-      this.#updateFileRecord(filePath, content, false, isLocked);
+      if (isBinary) {
+        this.#updateFileRecord(filePath, Buffer.from(content).toString('base64'), true, isLocked);
+      } else {
+        this.#updateFileRecord(filePath, content, false, isLocked);
+      }
 
       logger.info('File updated');
     } catch (error) {

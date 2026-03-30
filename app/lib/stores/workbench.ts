@@ -376,15 +376,19 @@ export class WorkbenchStore {
     }
   }
 
-  async writeFile(filePath: string, content: string) {
+  async writeFile(filePath: string, content: string | Uint8Array) {
     return this.#writeFile(filePath, content);
   }
 
-  async writeSystemFile(filePath: string, content: string) {
+  async writeSystemFile(filePath: string, content: string | Uint8Array) {
     return this.#writeFile(filePath, content, { trackModification: false, select: false });
   }
 
-  async #writeFile(filePath: string, content: string, options: { trackModification?: boolean; select?: boolean } = {}) {
+  async #writeFile(
+    filePath: string,
+    content: string | Uint8Array,
+    options: { trackModification?: boolean; select?: boolean } = {},
+  ) {
     const existingFile = this.#filesStore.getFile(filePath);
 
     if (existingFile) {

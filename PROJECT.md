@@ -55,3 +55,27 @@ In a loosely organized project, it may as well happen that multiple PRs are open
 
 Once a PR is merged, a squashed commit contains the whole PR description which allows for a good change log.
 All authors of commits in the PR are mentioned in the squashed commit message and become contributors 🙌
+
+## Publisher Factory
+
+`Publisher Mode` is a separate bolt.diy workflow for high-throughput static site production.
+It is intentionally more deterministic than the default coding workflow.
+
+Core rules:
+
+1. `publisher` stays isolated from the default bolt flow.
+2. The app owns `head`, canonical URLs, robots, sitemap, schema JSON-LD, language defaults, and branding meta tags.
+3. Agents operate on publisher contracts and block props, not on final assembled HTML structure.
+4. Intake documents and approved contract updates are the only source of truth for `title`, `description`, and `h1`.
+5. Block content must never override page metadata or duplicate `head`-owned fields.
+
+Publisher pipelines:
+
+- `Pipeline A`: document-first import -> normalize -> contracts -> build -> checks -> export/publish
+- `Pipeline B`: template-plus-documents import -> shell/block reuse -> contracts -> build -> checks -> export/publish
+
+Operator-first target:
+
+- Single strong operator should be able to run many sites through the same deterministic pipeline.
+- Ambiguity is allowed only as an exception path.
+- Throughput comes from typed contracts, block reuse, release gates, and clear UI states rather than freeform agent creativity.

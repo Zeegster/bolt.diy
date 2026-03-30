@@ -2,6 +2,8 @@
   {
     "id": "site-header-basic",
     "zone": "header",
+    "schemaVersion": 1,
+    "allowedZones": ["header"],
     "variant": "basic",
     "name": "Simple Header",
     "tags": ["navigation", "shell"],
@@ -19,6 +21,8 @@
   {
     "id": "before-content-band",
     "zone": "beforeContent",
+    "schemaVersion": 1,
+    "allowedZones": ["beforeContent"],
     "variant": "band",
     "name": "Announcement Band",
     "tags": ["shell", "announcement"],
@@ -33,6 +37,8 @@
   {
     "id": "hero-centered",
     "zone": "content",
+    "schemaVersion": 1,
+    "allowedZones": ["content"],
     "variant": "hero",
     "name": "Centered Hero",
     "tags": ["hero", "landing"],
@@ -50,6 +56,8 @@
   {
     "id": "content-prose",
     "zone": "content",
+    "schemaVersion": 1,
+    "allowedZones": ["content"],
     "variant": "prose",
     "name": "Prose Section",
     "tags": ["content", "body"],
@@ -64,6 +72,8 @@
   {
     "id": "sidebar-links",
     "zone": "sidebar",
+    "schemaVersion": 1,
+    "allowedZones": ["sidebar"],
     "variant": "links",
     "name": "Sidebar Links",
     "tags": ["navigation", "sidebar"],
@@ -81,6 +91,8 @@
   {
     "id": "after-content-cta",
     "zone": "afterContent",
+    "schemaVersion": 1,
+    "allowedZones": ["afterContent"],
     "variant": "cta",
     "name": "After Content CTA",
     "tags": ["cta"],
@@ -97,6 +109,8 @@
   {
     "id": "site-footer-simple",
     "zone": "footer",
+    "schemaVersion": 1,
+    "allowedZones": ["footer"],
     "variant": "simple",
     "name": "Simple Footer",
     "tags": ["shell", "footer"],

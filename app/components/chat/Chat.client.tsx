@@ -27,6 +27,26 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
 import { supabaseConnection } from '~/lib/stores/supabase';
+import { saveWorkspaceSession, loadWorkspaceSession } from '~/lib/publisher/workspace-session';
+import {
+  PUBLISHER_INTAKE_SESSION_FILE,
+  PUBLISHER_PROJECT_FILE,
+  getPublisherImportedSourcePath,
+  resolveUniqueImportedSourcePath,
+} from '~/lib/publisher/constants';
+import { createPublisherProjectId } from '~/lib/publisher/bootstrap';
+import { createPublisherAssetRef, fileToDataUrl, fileToUint8Array } from '~/lib/publisher/file-helpers';
+import { savePublisherProjectState } from '~/lib/publisher/persistence';
+import type { IntakeSourceSnapshot, PublisherSiteSettings, WorkspaceMode } from '~/types/publisher';
+import { serializeIntakeSessionFiles } from '~/lib/publisher/intake-pipeline';
+import type { PublisherIntakeOnboardingSubmitPayload } from '~/components/publisher/PublisherIntakeOnboarding';
+import {
+  buildIntakeSessionChecks,
+  buildIntakeSourceManifest,
+  createIntakeSession,
+  detectIntakeScenario,
+  scanIntakeSourceTree,
+} from '~/lib/publisher/intake';
 import {
   buildAccountTurnMetrics,
   fnv1a32,
@@ -44,6 +64,22 @@ const toastAnimation = cssTransition({
 });
 
 const logger = createScopedLogger('Chat');
+
+async function sha1Hex(value: string) {
+  if (!globalThis.crypto?.subtle) {
+    return hashText(value);
+  }
+
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(value));
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function normalizeUploadedRelativePath(path: string) {
+  return path.replaceAll('\\', '/').replace(/^\/+/, '').split('/').filter(Boolean).join('/');
+}
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -215,6 +251,9 @@ export const ChatImpl = memo(
     const [imageDataList, setImageDataList] = useState<string[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
     const [fakeLoading, setFakeLoading] = useState(false);
+    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('default');
+    const [publisherOnboardingCompleted, setPublisherOnboardingCompleted] = useState(false);
+    const [publisherBootstrapping, setPublisherBootstrapping] = useState(false);
     const files = useStore(workbenchStore.files);
     const actionAlert = useStore(workbenchStore.alert);
     const deployAlert = useStore(workbenchStore.deployAlert);
@@ -223,7 +262,10 @@ export const ChatImpl = memo(
       (project) => project.id === supabaseConn.selectedProjectId,
     );
     const supabaseAlert = useStore(workbenchStore.supabaseAlert);
-    const { activeProviders, providers, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
+    const { activeProviders, providers, promptId, setPromptId, autoSelectTemplate, contextOptimizationEnabled } =
+      useSettings();
+    const hasPublisherProject = Boolean(files[PUBLISHER_PROJECT_FILE]);
+    const hasPublisherIntakeSession = Boolean(files[PUBLISHER_INTAKE_SESSION_FILE]);
 
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('selectedModel');
@@ -244,6 +286,9 @@ export const ChatImpl = memo(
     const [animationScope, animate] = useAnimate();
 
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+    const publisherWorkspaceReady =
+      workspaceMode === 'publisher' &&
+      (publisherOnboardingCompleted || hasPublisherProject || hasPublisherIntakeSession);
 
     const {
       messages,
@@ -700,6 +745,35 @@ export const ChatImpl = memo(
       if (!chatStarted) {
         setFakeLoading(true);
 
+        if (publisherWorkspaceReady) {
+          const modifiedFiles = workbenchStore.getModifiedFiles();
+          const artifact = modifiedFiles ? filesToArtifacts(modifiedFiles, `${Date.now()}`) : '';
+
+          setMessages([
+            {
+              id: `${new Date().getTime()}`,
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${artifact}${finalMessageContent}`,
+                },
+                ...imageDataList.map((imageData) => ({
+                  type: 'image',
+                  image: imageData,
+                })),
+              ] as any,
+            },
+          ]);
+          reload();
+          setFakeLoading(false);
+          setInput('');
+          clearComposerState();
+          workbenchStore.resetAllFileModifications();
+
+          return;
+        }
+
         if (autoSelectTemplate) {
           const { template, title } = await selectStarterTemplate({
             message: finalMessageContent,
@@ -875,6 +949,282 @@ export const ChatImpl = memo(
       Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
     };
 
+    useEffect(() => {
+      if (hasPublisherProject || hasPublisherIntakeSession) {
+        setWorkspaceMode('publisher');
+        setPublisherOnboardingCompleted(true);
+        saveWorkspaceSession({
+          mode: 'publisher',
+          stage: hasPublisherProject ? 'structure' : 'intake',
+          onboardingCompleted: true,
+        });
+        workbenchStore.setShowWorkbench(true);
+        workbenchStore.currentView.set('structure');
+
+        return;
+      }
+
+      const session = loadWorkspaceSession();
+
+      if (session) {
+        setWorkspaceMode(session.mode);
+        setPublisherOnboardingCompleted(Boolean(session.onboardingCompleted));
+      }
+    }, [hasPublisherIntakeSession, hasPublisherProject]);
+
+    const handleWorkspaceModeChange = useCallback(
+      (mode: WorkspaceMode) => {
+        setWorkspaceMode(mode);
+        saveWorkspaceSession({
+          mode,
+          stage: mode === 'publisher' ? (hasPublisherProject ? 'structure' : 'onboarding') : 'onboarding',
+          onboardingCompleted: mode === 'publisher' ? publisherOnboardingCompleted : false,
+        });
+
+        if (mode === 'publisher') {
+          if (promptId !== 'publisher') {
+            setPromptId('publisher');
+          }
+
+          if (publisherOnboardingCompleted || hasPublisherProject || hasPublisherIntakeSession) {
+            workbenchStore.setShowWorkbench(true);
+            workbenchStore.currentView.set('structure');
+          }
+
+          return;
+        }
+
+        if (promptId === 'publisher') {
+          setPromptId('default');
+        }
+
+        if (!chatStarted) {
+          workbenchStore.setShowWorkbench(false);
+        }
+
+        workbenchStore.currentView.set('code');
+      },
+      [
+        chatStarted,
+        hasPublisherIntakeSession,
+        hasPublisherProject,
+        promptId,
+        publisherOnboardingCompleted,
+        setPromptId,
+      ],
+    );
+
+    const handlePublisherOnboardingSubmit = useCallback(async (payload: PublisherIntakeOnboardingSubmitPayload) => {
+      setPublisherBootstrapping(true);
+
+      try {
+        const nextSettings: PublisherSiteSettings = {
+          ...payload.settings,
+          languages: payload.settings.multilingual
+            ? payload.settings.languages
+            : [payload.settings.defaultLanguage.toLowerCase()],
+        };
+        const sessionId = createPublisherProjectId(nextSettings.name);
+        const intakeSources: IntakeSourceSnapshot[] = [];
+        const collisionWarnings: Array<{ code: string; message: string; severity: 'warn'; path: string }> = [];
+        const usedStoredPaths = new Set(
+          Object.keys(workbenchStore.files.get()).filter((path) =>
+            path.startsWith('/home/project/.bolt/publisher/intake/sources/imported/'),
+          ),
+        );
+
+        for (const sourceFile of payload.sourceFiles) {
+          const originalRelativePath = sourceFile.webkitRelativePath || sourceFile.name;
+          const relativePath = normalizeUploadedRelativePath(originalRelativePath) || sourceFile.name;
+          const bucket = await sha1Hex(`${payload.sourceLabel}:${relativePath}`);
+          const baseStoredPath = getPublisherImportedSourcePath(relativePath, bucket);
+          const storedPath = resolveUniqueImportedSourcePath(baseStoredPath, usedStoredPaths);
+          usedStoredPaths.add(storedPath);
+
+          if (storedPath !== baseStoredPath) {
+            collisionWarnings.push({
+              code: 'source-path-collision',
+              message: `Imported source path collision was resolved for ${relativePath}.`,
+              severity: 'warn',
+              path: relativePath,
+            });
+          }
+
+          const lowerName = relativePath.toLowerCase();
+          const isText =
+            sourceFile.type.startsWith('text/') ||
+            lowerName.endsWith('.md') ||
+            lowerName.endsWith('.markdown') ||
+            lowerName.endsWith('.txt') ||
+            lowerName.endsWith('.html') ||
+            lowerName.endsWith('.htm');
+
+          const content = isText ? await sourceFile.text() : await fileToUint8Array(sourceFile);
+          intakeSources.push({
+            id: `${bucket}:${relativePath}`,
+            path: relativePath,
+            storedPath,
+            kind: 'file',
+            mimeType: sourceFile.type || undefined,
+            size: sourceFile.size,
+            isBinary: !isText,
+            text: typeof content === 'string' ? content : undefined,
+            html: lowerName.endsWith('.html') || lowerName.endsWith('.htm') ? String(content) : undefined,
+            sourceFamilyHint:
+              lowerName.endsWith('.html') || lowerName.endsWith('.htm')
+                ? 'html'
+                : lowerName.endsWith('.md') || lowerName.endsWith('.markdown') || lowerName.endsWith('.txt')
+                  ? 'document'
+                  : undefined,
+            label: sourceFile.name,
+          });
+
+          await workbenchStore.writeSystemFile(storedPath, content);
+        }
+
+        const scan = scanIntakeSourceTree(intakeSources, {
+          rootPath: payload.sourceLabel,
+          importKind: payload.importKind,
+        });
+        const scenario = scan.scenarioResult ?? detectIntakeScenario(scan, payload.importKind);
+        const session = createIntakeSession({
+          id: sessionId,
+          sourceRoot: payload.sourceLabel,
+          importKind: payload.importKind,
+          scenario: scenario.scenario,
+          activeContentFamily: scenario.activeContentFamily,
+          referenceSourceFamily: scenario.referenceSourceFamily,
+          projectName: nextSettings.name,
+          sourceLabel: payload.sourceLabel,
+          sourceManifest: buildIntakeSourceManifest(intakeSources, payload.sourceLabel),
+          pages: scan.pageCandidates,
+          shellCandidates: scan.shellCandidates,
+          templateCandidatePath: scenario.templateCandidatePath,
+          homePageCandidatePath: scenario.homePageCandidatePath,
+          warnings: [...scan.warnings, ...scenario.warnings, ...collisionWarnings],
+          scenarioResult: scenario,
+          disambiguation: scenario.needsUserChoice
+            ? {
+                status: 'pending',
+                reason: 'Ambiguous intake scan detected.',
+                candidateImportKinds: payload.importKind ? [payload.importKind] : ['html', 'document'],
+                templateCandidatePaths: scenario.templateCandidatePaths ?? [],
+                homeCandidatePaths: scenario.homeCandidatePaths ?? [],
+                selectedImportKind: payload.importKind,
+                selectedTemplateCandidatePath: scenario.templateCandidatePath,
+                selectedHomePageCandidatePath: scenario.homePageCandidatePath,
+              }
+            : {
+                status: 'resolved',
+                reason: 'Intake scan was deterministic.',
+                candidateImportKinds: [payload.importKind],
+                templateCandidatePaths: scenario.templateCandidatePaths ?? [],
+                homeCandidatePaths: scenario.homeCandidatePaths ?? [],
+                selectedImportKind: payload.importKind,
+                selectedTemplateCandidatePath: scenario.templateCandidatePath,
+                selectedHomePageCandidatePath: scenario.homePageCandidatePath,
+              },
+        });
+        session.project = {
+          ...session.project,
+          name: nextSettings.name,
+          domain: nextSettings.domain,
+          defaultLanguage: nextSettings.defaultLanguage,
+          multilingual: nextSettings.multilingual,
+          languages: nextSettings.languages,
+          sourceRoot: payload.sourceLabel,
+        };
+
+        const storedPathBySourcePath = new Map(
+          intakeSources.map((source) => [
+            source.path,
+            source.storedPath ?? getPublisherImportedSourcePath(source.path),
+          ]),
+        );
+        session.pages = session.pages.map((page) => ({
+          ...page,
+          storedSourcePath: storedPathBySourcePath.get(page.sourcePath),
+        }));
+        session.status = scenario.needsUserChoice ? 'pending-disambiguation' : 'reviewing';
+        session.scenarioResult = scenario;
+        session.checks = buildIntakeSessionChecks(session);
+        session.supportedSources = scan.supportedSources;
+        session.unsupportedSources = scan.unsupportedSources;
+        session.ignoredPaths = scan.ignoredPaths;
+        session.unsupportedPaths = scan.unsupportedPaths;
+        session.noiseRoots = scan.noiseRoots;
+        session.assetRoots = scan.assetRoots;
+        session.blockLibraryPaths = scan.blockLibraryCandidates;
+        session.blockLibraryCandidates = scan.blockLibraryCandidates;
+        session.shellCandidatePaths = scan.shellCandidates;
+        session.shellCandidates = scan.shellCandidates;
+        session.pageSourcePaths = scan.pageCandidates.map((page) => page.sourcePath);
+        session.documentSourcePaths = scan.referenceCandidates
+          .filter((page) => page.sourceFamily === 'document')
+          .map((page) => page.sourcePath);
+        session.assetSourcePaths = scan.supportedSources
+          .filter((source) => source.sourceFamilyHint === 'asset')
+          .map((source) => source.path);
+
+        for (const [assetName, file] of Object.entries(payload.assets) as Array<
+          ['favicon' | 'metaImage' | 'logo', File | undefined]
+        >) {
+          if (!file) {
+            continue;
+          }
+
+          const assetRef = createPublisherAssetRef(assetName, file.name, file.type || undefined);
+          await workbenchStore.writeSystemFile(assetRef.path, await fileToUint8Array(file));
+
+          const previewPath = await fileToDataUrl(file);
+
+          session.project[assetName] = {
+            kind: assetName,
+            sourcePath: file.name,
+            storedPath: assetRef.path,
+            previewPath,
+            label: file.name,
+            mimeType: file.type || undefined,
+            path: assetRef.path,
+            publicPath: assetRef.publicPath,
+          };
+        }
+
+        const intakeArtifacts = serializeIntakeSessionFiles(session);
+
+        for (const [filePath, content] of Object.entries(intakeArtifacts)) {
+          await workbenchStore.writeSystemFile(filePath, content);
+        }
+
+        savePublisherProjectState(session.id, {
+          onboardingCompleted: true,
+          siteSettings: nextSettings,
+          selectedPageId: session.currentPageId,
+          status: 'intake-review',
+        });
+        saveWorkspaceSession({
+          mode: 'publisher',
+          stage: 'intake',
+          onboardingCompleted: true,
+          intakeSessionId: session.id,
+        });
+        setPublisherOnboardingCompleted(true);
+        setWorkspaceMode('publisher');
+        workbenchStore.setShowWorkbench(true);
+        workbenchStore.currentView.set('structure');
+        toast.success(
+          scenario.needsUserChoice
+            ? 'Source scanned. Resolve disambiguation before intake review.'
+            : 'Source scanned and ready for intake review',
+        );
+      } catch (error) {
+        console.error(error);
+        toast.error('Failed to scan source for Publisher intake');
+      } finally {
+        setPublisherBootstrapping(false);
+      }
+    }, []);
+
     const activeInput = isProviderAccountMode ? accountInput : input;
     const activeStreaming = (isProviderAccountMode ? accountIsLoading : isLoading) || fakeLoading;
     const activeMessages = isProviderAccountMode
@@ -898,6 +1248,11 @@ export const ChatImpl = memo(
         input={activeInput}
         showChat={showChat}
         chatStarted={chatStarted}
+        workspaceMode={workspaceMode}
+        publisherWorkspaceReady={publisherWorkspaceReady}
+        publisherOnboardingBusy={publisherBootstrapping}
+        onWorkspaceModeChange={handleWorkspaceModeChange}
+        onPublisherOnboardingSubmit={handlePublisherOnboardingSubmit}
         isStreaming={activeStreaming}
         onStreamingChange={(streaming) => {
           streamingState.set(streaming);

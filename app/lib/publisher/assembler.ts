@@ -10,12 +10,16 @@ import {
 } from './constants';
 import { publisherBlockRegistry, type PublisherBlockRegistry } from './block-registry';
 import { runPublisherChecks } from './checker';
+import { buildPageHeadMetadata, buildRobotsTxt, buildSiteManifest, buildSitemapXml } from './metadata';
 import type {
+  AssetRef,
   CheckReport,
   LoadedPublisherState,
   PageContract,
   PublisherAssemblyResult,
   PublisherAgentContext,
+  PublisherBuildArtifact,
+  PublisherBuildSummary,
   PublisherJob,
   SlotContract,
   ZoneContract,
@@ -121,34 +125,8 @@ function buildBreadcrumbs(page: PageContract, pages: PageContract[]) {
 </nav>`;
 }
 
-function buildSchemaJson(state: LoadedPublisherState, page: PageContract) {
-  const siteUrl = state.project?.siteUrl ?? 'https://example.com';
-  const schemaType = page.seo.schemaType ?? 'WebPage';
-
-  return JSON.stringify(
-    {
-      '@context': 'https://schema.org',
-      '@type': schemaType,
-      name: page.seo.title,
-      description: page.seo.description,
-      url: new URL(page.path, siteUrl).toString(),
-      inLanguage: state.project?.language ?? 'en',
-      breadcrumb:
-        state.pages.length > 1
-          ? {
-              '@type': 'BreadcrumbList',
-              itemListElement: state.pages.slice(0, 2).map((currentPage, index) => ({
-                '@type': 'ListItem',
-                position: index + 1,
-                name: currentPage.name,
-                item: new URL(currentPage.path, siteUrl).toString(),
-              })),
-            }
-          : undefined,
-    },
-    null,
-    2,
-  );
+function getAssetHref(asset?: AssetRef) {
+  return asset?.publicPath ?? asset?.path;
 }
 
 function buildPageHtml(state: LoadedPublisherState, page: PageContract, registry: PublisherBlockRegistry): string {
@@ -168,21 +146,25 @@ function buildPageHtml(state: LoadedPublisherState, page: PageContract, registry
   );
   const footer = renderZone('footer', resolveZone(page, 'footer', state.project?.sharedShell), registry);
   const breadcrumbs = buildBreadcrumbs(page, state.pages);
-  const siteName = state.project?.siteSeo?.siteName ?? state.project?.name ?? page.name;
+  const faviconHref = getAssetHref(state.project?.favicon);
+  const metaImageHref = getAssetHref(state.project?.metaImage);
+  const metadata = buildPageHeadMetadata(state, page, { faviconHref, metaImageHref });
 
   return `<!doctype html>
-<html lang="${escapeHtml(state.project?.language ?? 'en')}">
+<html lang="${escapeHtml(metadata.lang)}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(page.seo.title)}</title>
-    <meta name="description" content="${escapeHtml(page.seo.description ?? '')}" />
-    <meta name="robots" content="${escapeHtml(page.seo.robots ?? 'index,follow')}" />
-    <meta property="og:site_name" content="${escapeHtml(siteName)}" />
-    <link rel="canonical" href="${escapeHtml(page.seo.canonicalPath ?? page.path)}" />
+    <title>${escapeHtml(metadata.title)}</title>
+    <meta name="description" content="${escapeHtml(metadata.description)}" />
+    <meta name="robots" content="${escapeHtml(metadata.robots)}" />
+    <meta property="og:site_name" content="${escapeHtml(metadata.siteName)}" />
+    ${metadata.metaImageHref ? `<meta property="og:image" content="${escapeHtml(metadata.metaImageHref)}" />` : ''}
+    ${metadata.canonicalUrl ? `<link rel="canonical" href="${escapeHtml(metadata.canonicalUrl)}" />` : ''}
+    ${metadata.faviconHref ? `<link rel="icon" href="${escapeHtml(metadata.faviconHref)}" />` : ''}
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="/assets/css/main.css" />
-    <script type="application/ld+json">${buildSchemaJson(state, page)}</script>
+    <script type="application/ld+json">${metadata.schemaJson}</script>
   </head>
   <body data-page-id="${escapeHtml(page.id)}" data-page-slug="${escapeHtml(page.slug)}">
     ${header}
@@ -284,47 +266,94 @@ function buildMainJs() {
 }
 
 function buildManifest(state: LoadedPublisherState) {
-  const name = state.project?.siteSeo?.siteName ?? state.project?.name ?? 'Publisher Site';
-  return JSON.stringify(
-    {
-      name,
-      short_name: name,
-      start_url: '/',
-      display: 'standalone',
-      background_color: normalizeTokens(state.theme)['color.background'],
-      theme_color: normalizeTokens(state.theme)['color.primary'],
-    },
-    null,
-    2,
-  );
+  return buildSiteManifest(state, getAssetHref(state.project?.favicon));
 }
 
 function buildRobots(state: LoadedPublisherState) {
-  const sitemapUrl = state.project?.siteUrl
-    ? `${state.project.siteUrl.replace(/\/$/, '')}/sitemap.xml`
-    : '/sitemap.xml';
-  return `User-agent: *\nAllow: /\nSitemap: ${sitemapUrl}\n`;
+  return buildRobotsTxt(state);
 }
 
 function buildSitemap(state: LoadedPublisherState) {
-  const baseUrl = state.project?.siteUrl ?? 'https://example.com';
-  const urls = state.pages.map((page) => `<url><loc>${new URL(page.path, baseUrl).toString()}</loc></url>`).join('');
+  return buildSitemapXml(state);
+}
 
-  return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
+function fingerprintText(content: string) {
+  let hash = 5381;
+
+  for (let index = 0; index < content.length; index += 1) {
+    hash = (hash * 33) ^ content.charCodeAt(index);
+  }
+
+  return `b${(hash >>> 0).toString(16)}`;
+}
+
+function detectArtifactContentType(path: string): PublisherBuildArtifact['contentType'] {
+  if (path.endsWith('.html')) {
+    return 'html';
+  }
+
+  if (path.endsWith('.css')) {
+    return 'css';
+  }
+
+  if (path.endsWith('.js')) {
+    return 'js';
+  }
+
+  if (path.endsWith('.xml')) {
+    return 'xml';
+  }
+
+  if (path.endsWith('.txt')) {
+    return 'txt';
+  }
+
+  if (path.endsWith('.json') || path.endsWith('.webmanifest')) {
+    return 'json';
+  }
+
+  return 'asset';
+}
+
+function buildPublisherSummary(
+  projectId: string | undefined,
+  checks: CheckReport[],
+  files: Record<string, string>,
+): PublisherBuildSummary {
+  const workingFailures = checks.filter((report) => report.gate === 'working' && report.status === 'fail').length;
+  const releaseFailures = checks.filter((report) => report.gate === 'release' && report.status === 'fail').length;
+  const warningCount = checks.filter((report) => report.status === 'warn').length;
+
+  return {
+    id: `${projectId ?? 'publisher'}-${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    projectId,
+    status: releaseFailures > 0 ? 'failed' : workingFailures > 0 ? 'contract-ready' : 'release-ready',
+    stage: releaseFailures > 0 ? 'check' : 'export',
+    workingFailures,
+    releaseFailures,
+    warningCount,
+    artifacts: Object.entries(files).map(([path, content]) => ({
+      path,
+      contentType: detectArtifactContentType(path),
+      fingerprint: fingerprintText(content),
+    })),
+  };
 }
 
 export function buildPublisherStateFile(
   projectId: string | undefined,
   checks: CheckReport[],
   context: PublisherAgentContext,
+  build: PublisherBuildSummary,
 ): string {
   const job: PublisherJob = {
-    id: `${projectId ?? 'publisher'}-${Date.now()}`,
+    id: build.id,
     projectId,
-    stage: 'assemble',
-    status: checks.some((report) => report.status === 'fail') ? 'failed' : 'completed',
-    startedAt: new Date().toISOString(),
-    finishedAt: new Date().toISOString(),
+    stage: build.stage,
+    status: build.releaseFailures > 0 ? 'failed' : 'completed',
+    startedAt: build.createdAt,
+    finishedAt: build.createdAt,
     details: checks.filter((report) => report.status !== 'pass').map((report) => report.message),
   };
 
@@ -333,7 +362,8 @@ export function buildPublisherStateFile(
       projectId,
       currentContext: context,
       jobs: [job],
-      lastBuildAt: new Date().toISOString(),
+      lastBuildAt: build.createdAt,
+      latestBuild: build,
     },
     null,
     2,
@@ -348,11 +378,15 @@ export function assemblePublisherProject(
   const checks = runPublisherChecks(state, registry);
 
   if (!state.project) {
+    const build = buildPublisherSummary(undefined, checks, {
+      [PUBLISHER_CHECKS_FILE]: JSON.stringify(checks, null, 2),
+    });
     return {
       files: {
         [PUBLISHER_CHECKS_FILE]: JSON.stringify(checks, null, 2),
       },
       checks,
+      build,
     };
   }
 
@@ -363,7 +397,6 @@ export function assemblePublisherProject(
     [PUBLISHER_MANIFEST_FILE]: buildManifest(state),
     [PUBLISHER_ROBOTS_FILE]: buildRobots(state),
     [PUBLISHER_SITEMAP_FILE]: buildSitemap(state),
-    [PUBLISHER_STATE_FILE]: buildPublisherStateFile(state.project.id, checks, context),
   };
 
   state.pages.forEach((page) => {
@@ -372,5 +405,8 @@ export function assemblePublisherProject(
     files[targetPath] = buildPageHtml(state, page, registry);
   });
 
-  return { files, checks };
+  const build = buildPublisherSummary(state.project.id, checks, files);
+  files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project.id, checks, context, build);
+
+  return { files, checks, build };
 }

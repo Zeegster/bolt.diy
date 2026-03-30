@@ -1,12 +1,25 @@
-import type { PublisherAgentContext } from '~/types/publisher';
+import type {
+  PublisherAgentContext,
+  PublisherBuildSummary,
+  PublisherMarkdownSource,
+  PublisherProjectStatus,
+  PublisherReferenceState,
+  PublisherSiteSettings,
+} from '~/types/publisher';
 
 const STORAGE_KEY = 'bolt.publisher.projects';
 
 export interface PersistedPublisherProjectState {
   selectedPageId?: string;
+  status?: PublisherProjectStatus;
   agentHistory: PublisherAgentContext[];
   lastPrompt?: string;
   lastBuildAt?: string;
+  onboardingCompleted?: boolean;
+  siteSettings?: PublisherSiteSettings;
+  markdownSources?: PublisherMarkdownSource[];
+  referenceState?: PublisherReferenceState;
+  buildHistory?: PublisherBuildSummary[];
 }
 
 type PersistedPublisherMap = Record<string, PersistedPublisherProjectState>;
@@ -59,6 +72,7 @@ export function savePublisherProjectState(
     ...previous,
     ...patch,
     agentHistory: patch.agentHistory ?? previous.agentHistory,
+    buildHistory: patch.buildHistory ?? previous.buildHistory ?? [],
   };
 
   saveAllProjects(current);

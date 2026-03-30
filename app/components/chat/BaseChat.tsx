@@ -47,6 +47,11 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import { getProviderRuntimeState } from '~/utils/providerRuntime';
 import Popover from '~/components/ui/Popover';
 import { ProviderSettingsPopover } from './ProviderSettingsPopover';
+import {
+  PublisherIntakeOnboarding,
+  type PublisherIntakeOnboardingSubmitPayload,
+} from '~/components/publisher/PublisherIntakeOnboarding';
+import type { WorkspaceMode } from '~/types/publisher';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -86,6 +91,11 @@ interface BaseChatProps {
   clearDeployAlert?: () => void;
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
+  workspaceMode?: WorkspaceMode;
+  publisherWorkspaceReady?: boolean;
+  publisherOnboardingBusy?: boolean;
+  onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
+  onPublisherOnboardingSubmit?: (payload: PublisherIntakeOnboardingSubmitPayload) => Promise<void> | void;
 }
 
 interface CodexAuthStatus {
@@ -147,6 +157,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       clearSupabaseAlert,
       data,
       actionRunner,
+      workspaceMode = 'default',
+      publisherWorkspaceReady = false,
+      publisherOnboardingBusy = false,
+      onWorkspaceModeChange,
+      onPublisherOnboardingSubmit,
     },
     ref,
   ) => {
@@ -754,7 +769,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <ClientOnly>{() => <Menu />}</ClientOnly>
         <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
-            {!chatStarted && (
+            {!chatStarted && workspaceMode === 'default' && (
               <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
                   Where ideas begin
@@ -764,9 +779,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </p>
               </div>
             )}
+            {!chatStarted && workspaceMode === 'publisher' && !publisherWorkspaceReady && (
+              <div id="intro" className="mt-8 max-w-chat mx-auto text-center px-4 lg:px-0">
+                <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-accent-400">
+                  Publisher Mode
+                </div>
+                <h1 className="mt-4 text-3xl lg:text-5xl font-bold text-bolt-elements-textPrimary">
+                  Bootstrap the site before the first prompt
+                </h1>
+                <p className="text-md lg:text-lg mt-4 text-bolt-elements-textSecondary">
+                  Configure site settings, scan documents or an HTML source, and let Bolt work from reviewed contracts
+                  instead of raw page markup.
+                </p>
+              </div>
+            )}
             <StickToBottom
               className={classNames('pt-6 px-2 sm:px-6 relative', {
-                'h-full flex flex-col modern-scrollbar': chatStarted,
+                'h-full flex flex-col modern-scrollbar': chatStarted || publisherWorkspaceReady,
               })}
               resize="smooth"
               initial="smooth"
@@ -1060,7 +1089,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         minHeight: TEXTAREA_MIN_HEIGHT,
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
-                      placeholder="How can Bolt help you today?"
+                      placeholder={
+                        workspaceMode === 'publisher'
+                          ? 'Describe the next publisher change or ask for a zone/block update…'
+                          : 'How can Bolt help you today?'
+                      }
                       translate="no"
                     />
                     <ClientOnly>
@@ -1109,7 +1142,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onStop={stopListening}
                           disabled={isStreaming}
                         />
-                        {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
+                        {(chatStarted || publisherWorkspaceReady) && (
+                          <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>
+                        )}
                       </div>
                       {input.length > 3 ? (
                         <div className="text-xs text-bolt-elements-textTertiary">
@@ -1127,13 +1162,45 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </StickToBottom>
             <div className="flex flex-col justify-center">
               {!chatStarted && (
-                <div className="flex justify-center gap-2">
-                  {ImportButtons(importChat)}
-                  <GitCloneButton importChat={importChat} />
+                <div className="flex flex-col gap-4 max-w-chat mx-auto w-full px-4">
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center gap-1 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1">
+                      {(['default', 'publisher'] as WorkspaceMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => onWorkspaceModeChange?.(mode)}
+                          className={classNames(
+                            'rounded-full px-3 py-1.5 text-sm transition-colors',
+                            workspaceMode === mode
+                              ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
+                              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                          )}
+                        >
+                          {mode === 'default' ? 'Default Bolt' : 'Publisher'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {workspaceMode === 'default' ? (
+                    <div className="flex justify-center gap-2">
+                      {ImportButtons(importChat)}
+                      <GitCloneButton importChat={importChat} />
+                    </div>
+                  ) : null}
+
+                  {workspaceMode === 'publisher' && !publisherWorkspaceReady ? (
+                    <PublisherIntakeOnboarding
+                      busy={publisherOnboardingBusy}
+                      onSubmit={(payload) => onPublisherOnboardingSubmit?.(payload)}
+                    />
+                  ) : null}
                 </div>
               )}
               <div className="flex flex-col gap-5">
                 {!chatStarted &&
+                  workspaceMode === 'default' &&
                   ExamplePrompts((event, messageInput) => {
                     if (isStreaming) {
                       handleStop?.();
@@ -1142,7 +1209,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                     handleSendMessage?.(event, messageInput);
                   })}
-                {!chatStarted && <StarterTemplates />}
+                {!chatStarted && workspaceMode === 'default' && <StarterTemplates />}
+                {!chatStarted && workspaceMode === 'publisher' && publisherWorkspaceReady ? (
+                  <div className="max-w-chat mx-auto w-full rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4 text-sm text-bolt-elements-textSecondary">
+                    Publisher workspace is ready. Open the Structure view, inspect generated contracts, or send a prompt
+                    to regenerate zones and slots.
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1150,7 +1223,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {() => (
               <Workbench
                 actionRunner={actionRunner ?? ({} as ActionRunner)}
-                chatStarted={chatStarted}
+                chatStarted={chatStarted || publisherWorkspaceReady}
                 isStreaming={isStreaming}
               />
             )}

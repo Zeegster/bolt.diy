@@ -1,33 +1,9 @@
-import {
-  requiredPublisherZones,
-  type CheckReport,
-  type LoadedPublisherState,
-  type PageContract,
-  type SlotContract,
-  type ZoneContract,
-  type ZoneType,
-} from '~/types/publisher';
+import { type CheckReport, type LoadedPublisherState, type PageContract, type SlotContract } from '~/types/publisher';
 import type { PublisherBlockRegistry } from './block-registry';
-import { hasNavigationTag } from './validator';
+import { resolveEffectiveZoneContract, validatePublisherContractGuards } from './contracts';
+import { buildCanonicalUrl, buildSitemapXml, hasCompleteSeo } from './metadata';
 import { normalizeTokens } from './token-engine';
-
-function resolveZone(page: PageContract, zone: ZoneType, sharedShell?: Partial<Record<ZoneType, ZoneContract>>) {
-  const pageZone = page.zones[zone];
-
-  if (pageZone && pageZone.enabled === false) {
-    return pageZone;
-  }
-
-  if (pageZone && pageZone.slots.length > 0) {
-    return pageZone;
-  }
-
-  if (page.usesProjectShell !== false && sharedShell?.[zone]) {
-    return sharedShell[zone];
-  }
-
-  return pageZone;
-}
+import { hasNavigationTag } from './validator';
 
 function createReport(report: CheckReport): CheckReport {
   return {
@@ -36,8 +12,39 @@ function createReport(report: CheckReport): CheckReport {
   };
 }
 
+function createReleaseReport(report: CheckReport): CheckReport {
+  return {
+    gate: 'release',
+    ...report,
+  };
+}
+
+function countReports(reports: CheckReport[], gate: 'working' | 'release', status: 'warn' | 'fail') {
+  return reports.filter((report) => report.gate === gate && report.status === status).length;
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\/+$/, '') || '/';
+}
+
+function isInternalHref(value: string) {
+  return value.startsWith('/') && !value.startsWith('//');
+}
+
+function isKnownInternalHref(value: string, knownPaths: Set<string>) {
+  if (!isInternalHref(value)) {
+    return true;
+  }
+
+  return knownPaths.has(normalizePath(value.split('#')[0]));
+}
+
 export function runPublisherChecks(state: LoadedPublisherState, registry: PublisherBlockRegistry): CheckReport[] {
-  const reports: CheckReport[] = [...state.issues, ...state.checks];
+  const reports: CheckReport[] = [
+    ...state.issues,
+    ...state.checks,
+    ...validatePublisherContractGuards(state, registry),
+  ];
   const themeTokens = normalizeTokens(state.theme);
 
   if (!state.project) {
@@ -63,7 +70,62 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
     );
   }
 
+  if (state.project.multilingual && state.project.languages.length < 2) {
+    reports.push(
+      createReport({
+        name: 'multilingual-config',
+        status: 'fail',
+        message: 'Multilingual mode requires at least two languages.',
+        details: ['Add at least 2 language codes to project.languages or disable multilingual mode.'],
+      }),
+    );
+  }
+
+  if (!state.project.languages.includes(state.project.defaultLanguage)) {
+    reports.push(
+      createReport({
+        name: 'default-language',
+        status: 'fail',
+        message: 'The default language must be present in project.languages.',
+        details: [state.project.defaultLanguage],
+      }),
+    );
+  }
+
+  const projectAssets = [
+    ['favicon', state.project.favicon],
+    ['metaImage', state.project.metaImage],
+    ['logo', state.project.logo],
+  ] as const;
+
+  for (const [assetName, assetRef] of projectAssets) {
+    if (!assetRef?.path) {
+      reports.push(
+        createReport({
+          name: 'project-assets',
+          status: 'warn',
+          message: `Project ${assetName} is not configured yet.`,
+          details: ['Add the asset in Publisher site settings to improve branding and SEO readiness.'],
+        }),
+      );
+      continue;
+    }
+
+    if (!state.availableFilePaths.includes(assetRef.path)) {
+      reports.push(
+        createReport({
+          name: 'project-assets',
+          status: 'fail',
+          message: `Configured ${assetName} asset could not be found.`,
+          details: [assetRef.path],
+        }),
+      );
+    }
+  }
+
   const seenPaths = new Map<string, string>();
+  const seenCanonicals = new Map<string, string>();
+  const knownPagePaths = new Set(state.pages.map((page) => normalizePath(page.path)));
 
   for (const page of state.pages) {
     if (seenPaths.has(page.path)) {
@@ -80,27 +142,28 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
       seenPaths.set(page.path, page.id);
     }
 
-    for (const zone of requiredPublisherZones) {
-      const zoneContract = resolveZone(page, zone, state.project.sharedShell);
+    const canonicalUrl = buildCanonicalUrl(page, state.project.siteUrl);
 
-      if (!zoneContract?.slots?.length) {
+    if (canonicalUrl) {
+      if (seenCanonicals.has(canonicalUrl)) {
         reports.push(
-          createReport({
-            name: 'missing-zone',
+          createReleaseReport({
+            name: 'canonical-collision',
             status: 'fail',
-            message: `Page "${page.name}" is missing required ${zone} content.`,
-            details: [`Add at least one block to ${zone}.`],
+            message: `Page "${page.name}" resolves to a duplicate canonical URL.`,
+            details: [seenCanonicals.get(canonicalUrl) || '', page.id, canonicalUrl],
             pageId: page.id,
-            zone,
           }),
         );
+      } else {
+        seenCanonicals.set(canonicalUrl, page.id);
       }
     }
 
-    const headerHasNavigation = resolveZone(page, 'header', state.project.sharedShell)?.slots.some(
+    const headerHasNavigation = resolveEffectiveZoneContract(page, 'header', state.project.sharedShell)?.slots.some(
       (slot: SlotContract) => hasNavigationTag(registry.getById(slot.blockId)),
     );
-    const sidebarHasNavigation = resolveZone(page, 'sidebar', state.project.sharedShell)?.slots.some(
+    const sidebarHasNavigation = resolveEffectiveZoneContract(page, 'sidebar', state.project.sharedShell)?.slots.some(
       (slot: SlotContract) => hasNavigationTag(registry.getById(slot.blockId)),
     );
 
@@ -116,44 +179,26 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
       );
     }
 
+    if (state.project.multilingual && page.seo.title.trim().length === 0) {
+      reports.push(
+        createReport({
+          name: 'multilingual-seo',
+          status: 'warn',
+          message: `Page "${page.name}" is missing language-aware SEO content.`,
+          details: ['Populate localized title/description before export if pages diverge by locale.'],
+          pageId: page.id,
+        }),
+      );
+    }
+
     for (const [zone, zoneContract] of Object.entries(page.zones) as Array<
-      [ZoneType, NonNullable<PageContract['zones'][ZoneType]>]
+      [keyof PageContract['zones'], NonNullable<PageContract['zones'][keyof PageContract['zones']]>]
     >) {
       for (const slot of zoneContract.slots) {
         const block = registry.getById(slot.blockId);
 
         if (!block) {
-          reports.push(
-            createReport({
-              name: 'missing-block',
-              status: 'fail',
-              message: `Unknown block "${slot.blockId}" referenced in ${page.name}.`,
-              details: [`Zone: ${zone}`, `Slot: ${slot.id}`],
-              pageId: page.id,
-              zone,
-            }),
-          );
           continue;
-        }
-
-        const missingRequiredProps = block.slots
-          .filter((definition) => definition.required)
-          .filter((definition) => {
-            const value = slot.props[definition.key];
-            return value === undefined || value === null || `${value}`.trim() === '';
-          });
-
-        if (missingRequiredProps.length > 0) {
-          reports.push(
-            createReport({
-              name: 'missing-slot-props',
-              status: 'fail',
-              message: `Block "${block.name}" is missing required props.`,
-              details: missingRequiredProps.map((prop) => `${page.name}/${zone}/${slot.id}: ${prop.key}`),
-              pageId: page.id,
-              zone,
-            }),
-          );
         }
 
         const assetWarnings = Object.entries(slot.props)
@@ -172,7 +217,94 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
             }),
           );
         }
+
+        for (const [key, value] of Object.entries(slot.props)) {
+          if (typeof value !== 'string' || value.trim().length === 0) {
+            continue;
+          }
+
+          const loweredKey = key.toLowerCase();
+
+          if (
+            (loweredKey.includes('href') || loweredKey.includes('link')) &&
+            !isKnownInternalHref(value, knownPagePaths)
+          ) {
+            reports.push(
+              createReleaseReport({
+                name: 'broken-internal-link',
+                status: 'fail',
+                message: `Block "${block.name}" references an unknown internal path.`,
+                details: [`${page.name}/${slot.id}/${key}: ${value}`],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
+          if (
+            (loweredKey.includes('image') || loweredKey.includes('logo')) &&
+            !value.startsWith('/assets/') &&
+            !value.startsWith('http')
+          ) {
+            reports.push(
+              createReleaseReport({
+                name: 'image-policy',
+                status: 'warn',
+                message: `Block "${block.name}" uses an image reference outside the managed asset conventions.`,
+                details: [`${page.name}/${slot.id}/${key}: ${value}`],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+        }
       }
+    }
+
+    if (!hasCompleteSeo(page.seo)) {
+      reports.push(
+        createReleaseReport({
+          name: 'metadata-completeness',
+          status: 'fail',
+          message: `Page "${page.name}" is missing release-grade metadata.`,
+          details: ['Release requires both title and description.'],
+          pageId: page.id,
+        }),
+      );
+    }
+
+    if (!state.project.siteUrl) {
+      reports.push(
+        createReleaseReport({
+          name: 'site-url',
+          status: 'fail',
+          message: `Page "${page.name}" cannot emit an absolute canonical URL because siteUrl is not configured.`,
+          details: ['Set project.siteUrl or save a domain in site settings before release.'],
+          pageId: page.id,
+        }),
+      );
+    } else if (!canonicalUrl) {
+      reports.push(
+        createReleaseReport({
+          name: 'canonical-url',
+          status: 'fail',
+          message: `Page "${page.name}" is missing an absolute canonical URL.`,
+          details: ['Release output must emit canonical URLs using project.siteUrl.'],
+          pageId: page.id,
+        }),
+      );
+    }
+
+    if (page.seo.robots?.toLowerCase().includes('noindex')) {
+      reports.push(
+        createReleaseReport({
+          name: 'robots-sitemap-consistency',
+          status: 'warn',
+          message: `Page "${page.name}" is marked noindex and will be excluded from sitemap.xml.`,
+          details: ['Confirm this is intentional before publish.'],
+          pageId: page.id,
+        }),
+      );
     }
   }
 
@@ -200,17 +332,43 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
     );
   }
 
-  if (!reports.some((report) => report.status === 'pass')) {
+  const sitemapXml = buildSitemapXml(state);
+
+  if (state.project.siteUrl && !sitemapXml.includes('<url><loc>')) {
     reports.push(
-      createReport({
-        name: 'working-gate',
-        status: reports.some((report) => report.status === 'fail') ? 'warn' : 'pass',
-        message: reports.some((report) => report.status === 'fail')
-          ? 'Publisher working gate found issues that should be fixed before export.'
-          : 'Publisher working gate passed.',
+      createReleaseReport({
+        name: 'sitemap-pages',
+        status: 'warn',
+        message: 'Sitemap is empty after release filtering.',
+        details: ['Check robots directives and page registration before publish.'],
       }),
     );
   }
+
+  const workingFailures = countReports(reports, 'working', 'fail');
+  const releaseFailures = countReports(reports, 'release', 'fail');
+
+  reports.push(
+    createReport({
+      name: 'working-gate',
+      status: workingFailures > 0 ? 'warn' : 'pass',
+      message:
+        workingFailures > 0
+          ? 'Publisher working gate found issues that should be fixed before export.'
+          : 'Publisher working gate passed.',
+    }),
+  );
+
+  reports.push(
+    createReleaseReport({
+      name: 'release-gate',
+      status: releaseFailures > 0 ? 'fail' : 'pass',
+      message:
+        releaseFailures > 0
+          ? 'Publisher release gate is blocking publish until release checks pass.'
+          : 'Publisher release gate passed.',
+    }),
+  );
 
   return reports;
 }
