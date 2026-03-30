@@ -2,10 +2,14 @@ import type { WebContainer } from '@webcontainer/api';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
+import type { PublisherActionFileScope } from '~/types/publisher';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { resolvePublisherActionFileScope } from '~/lib/publisher/agent-model';
+import { PUBLISHER_CHECKS_FILE, PUBLISHER_ROOT, PUBLISHER_STATE_FILE } from '~/lib/publisher/constants';
+import { isPublisherContractFile } from '~/lib/publisher/ui-state';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -34,7 +38,7 @@ export type ActionStateUpdate =
 
 type ActionsMap = MapStore<Record<string, ActionState>>;
 
-class ActionCommandError extends Error {
+export class ActionCommandError extends Error {
   readonly _output: string;
   readonly _header: string;
 
@@ -61,6 +65,36 @@ class ActionCommandError extends Error {
   get header() {
     return this._header;
   }
+}
+
+export function assertPublisherFileWriteAllowed(filePath: string, scope: PublisherActionFileScope): void {
+  if (!filePath.startsWith(`${PUBLISHER_ROOT}/`) && filePath !== PUBLISHER_ROOT) {
+    return;
+  }
+
+  if (
+    filePath === PUBLISHER_STATE_FILE ||
+    filePath.startsWith(`${PUBLISHER_ROOT}/generated/`) ||
+    filePath.startsWith(`${PUBLISHER_ROOT}/intake/`)
+  ) {
+    throw new ActionCommandError(
+      'Blocked publisher file write',
+      `Write denied for ${filePath}. Generated, intake, and state publisher surfaces are app-owned.`,
+    );
+  }
+
+  if (scope === 'contracts-plus-checks' && filePath === PUBLISHER_CHECKS_FILE) {
+    return;
+  }
+
+  if (isPublisherContractFile(filePath) && filePath !== PUBLISHER_CHECKS_FILE) {
+    return;
+  }
+
+  throw new ActionCommandError(
+    'Blocked publisher file write',
+    `Write denied for ${filePath}. Scope ${scope} only allows publisher contract files${scope === 'contracts-plus-checks' ? ' plus checks.json' : ''}.`,
+  );
 }
 
 export class ActionRunner {
@@ -306,6 +340,9 @@ export class ActionRunner {
 
     const webcontainer = await this.#webcontainer;
     const relativePath = nodePath.relative(webcontainer.workdir, action.filePath);
+    const publisherScope = resolvePublisherActionFileScope(action.publisherAction);
+
+    assertPublisherFileWriteAllowed(action.filePath, publisherScope);
 
     let folder = nodePath.dirname(relativePath);
 

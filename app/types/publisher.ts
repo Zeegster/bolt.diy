@@ -336,6 +336,32 @@ export interface PublisherAgentContext {
   selectedBlockId?: string;
 }
 
+export type PublisherAgentActionKind = 'normalize' | 'map' | 'fill' | 'repair';
+export type PublisherActionFileScope = 'contracts-only' | 'contracts-plus-checks';
+
+export type PublisherAgentActionContract =
+  | {
+      action: 'normalize';
+      pageId: string;
+    }
+  | {
+      action: 'map';
+      pageId: string;
+      sourcePath: string;
+    }
+  | {
+      action: 'fill';
+      pageId: string;
+      zone: ZoneType;
+      slotId: string;
+    }
+  | {
+      action: 'repair';
+      checkName: string;
+      pageId?: string;
+      zone?: ZoneType;
+    };
+
 export interface BlockSlotDefinition {
   key: string;
   label: string;

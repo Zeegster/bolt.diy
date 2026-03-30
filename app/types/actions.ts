@@ -1,3 +1,4 @@
+import type { PublisherAgentActionContract } from '~/types/publisher';
 import type { Change } from 'diff';
 
 export type ActionType = 'file' | 'shell' | 'supabase';
@@ -9,6 +10,7 @@ export interface BaseAction {
 export interface FileAction extends BaseAction {
   type: 'file';
   filePath: string;
+  publisherAction?: PublisherAgentActionContract;
 }
 
 export interface ShellAction extends BaseAction {
