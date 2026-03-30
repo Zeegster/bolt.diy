@@ -74,7 +74,7 @@ Plans:
 Plans:
 - [x] 04-01: Separate assemble -> optimize -> check -> publish stages in code and diagnostics.
 - [x] 04-02: Expand release checks for links, assets, sitemap/robots/schema, and publish blockers.
-- [ ] 04-03: Formalize export/publish contract, artifact shape, and rollback or rebuild strategy.
+- [x] 04-03: Formalize export/publish contract, artifact shape, and rollback or rebuild strategy.
 - [ ] 04-04: Expand integration/tests/CI coverage for release behavior and future Lighthouse gating.
 
 ### Phase 5: Agent Operating Model

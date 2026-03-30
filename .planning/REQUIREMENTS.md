@@ -61,9 +61,9 @@
 
 ### Publish and History
 
-- [ ] **PUB-01**: Export/publish flow has a documented artifact contract, deploy entrypoints, and build metadata format.
-- [ ] **PUB-02**: Publish history records enough provenance to inspect what source and contract state produced an artifact.
-- [ ] **PUB-03**: System can support rollback-friendly artifact retention or reproducible rebuilds.
+- [x] **PUB-01**: Export/publish flow has a documented artifact contract, deploy entrypoints, and build metadata format.
+- [x] **PUB-02**: Publish history records enough provenance to inspect what source and contract state produced an artifact.
+- [x] **PUB-03**: System can support rollback-friendly artifact retention or reproducible rebuilds.
 
 ## v2 Requirements
 
@@ -121,9 +121,9 @@
 | VAL-02 | Phase 4 | Complete |
 | VAL-03 | Phase 4 | Pending |
 | VAL-04 | Phase 4 | Pending |
-| PUB-01 | Phase 4 | Pending |
-| PUB-02 | Phase 4 | Pending |
-| PUB-03 | Phase 4 | Pending |
+| PUB-01 | Phase 4 | Complete |
+| PUB-02 | Phase 4 | Complete |
+| PUB-03 | Phase 4 | Complete |
 | BATCH-01 | Phase 6 | Pending |
 | BATCH-02 | Phase 6 | Pending |
 | BATCH-03 | Phase 6 | Pending |
