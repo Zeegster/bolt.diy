@@ -9,13 +9,23 @@ import type {
   PageContract,
   PublisherBuildSummary,
   PublisherProjectStatus,
+  PublisherWorkflowState,
+  ZoneType,
 } from '~/types/publisher';
+import { publisherBlockRegistry } from '~/lib/publisher/block-registry';
+import { describePublisherSlotEditing } from '~/lib/publisher/contracts';
 import { IntakePageEditor } from './IntakePageEditor';
 import { IntakePageNavigator } from './IntakePageNavigator';
 import { PublisherReleaseWorkspace } from './PublisherReleaseWorkspace';
 import { IntakeSourcePane } from './IntakeSourcePane';
 import { PublisherSiteSettingsEditor, type PublisherSiteSettingsSubmitPayload } from './PublisherSiteSettingsEditor';
-import { createIntakePageDraft, createIntakeSourceReferences, type IntakePageDraft } from '~/lib/publisher/intake-ui';
+import {
+  createIntakePageDraft,
+  createIntakeSourceReferences,
+  getPublisherEditingConstraintDescription,
+  getPublisherEditingConstraintLabel,
+  type IntakePageDraft,
+} from '~/lib/publisher/intake-ui';
 
 interface PublisherIntakeWorkspaceProps {
   project?: SiteProjectContract;
@@ -26,6 +36,7 @@ interface PublisherIntakeWorkspaceProps {
   markdownSources?: PublisherMarkdownSource[];
   referenceState?: PublisherReferenceState;
   status: PublisherProjectStatus;
+  workflow: PublisherWorkflowState;
   buildHistory: PublisherBuildSummary[];
   selectedPageId?: string;
   sourceContentByPath?: Record<string, string>;
@@ -42,6 +53,8 @@ interface PublisherIntakeWorkspaceProps {
   onOpenTheme?: () => void;
   onOpenChecks?: () => void;
   onOpenReferences?: () => void;
+  onOpenSourceFile?: (path: string) => void;
+  onOpenOutput?: (page: PageContract) => void;
   onOpenState?: () => void;
   onOpenManifest?: () => void;
   onOpenSitemap?: () => void;
@@ -92,6 +105,7 @@ export function PublisherIntakeWorkspace({
   markdownSources = [],
   referenceState,
   status,
+  workflow,
   buildHistory,
   selectedPageId,
   sourceContentByPath = {},
@@ -108,6 +122,8 @@ export function PublisherIntakeWorkspace({
   onOpenTheme,
   onOpenChecks,
   onOpenReferences,
+  onOpenSourceFile,
+  onOpenOutput,
   onOpenState,
   onOpenManifest,
   onOpenSitemap,
@@ -153,6 +169,21 @@ export function PublisherIntakeWorkspace({
     );
   }, [markdownSources, referenceState?.sourceFiles, sourceContentByPath]);
   const checkCounts = useMemo(() => getCheckCounts(checks), [checks]);
+  const selectedBlockEditStates = useMemo(() => {
+    if (!selectedPage) {
+      return [];
+    }
+
+    return Object.entries(selectedPage.zones).flatMap(([zone, zoneContract]) =>
+      (zoneContract?.slots ?? [])
+        .map((slot) => ({
+          slot,
+          zone: zone as ZoneType,
+          state: describePublisherSlotEditing(selectedPage, zone as ZoneType, slot, publisherBlockRegistry),
+        }))
+        .filter((entry) => entry.state),
+    );
+  }, [selectedPage]);
 
   return (
     <div className="absolute inset-0 overflow-auto bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
@@ -160,11 +191,16 @@ export function PublisherIntakeWorkspace({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-300">
-              Publisher intake review
+              {workflow.label}
             </div>
             <div className="mt-2 text-sm text-bolt-elements-textSecondary">
               {project?.name ?? 'Untitled project'} · {pages.length} pages ·{' '}
               {theme ? Object.keys(theme.tokens).length : 0} tokens
+            </div>
+            <div className="mt-2 max-w-2xl text-sm text-bolt-elements-textPrimary">{workflow.summary}</div>
+            <div className="mt-1 text-xs text-bolt-elements-textSecondary">
+              Next action: {workflow.nextAction}
+              {workflow.blockingReason ? ` · Blocker: ${workflow.blockingReason}` : ''}
             </div>
           </div>
 
@@ -185,6 +221,36 @@ export function PublisherIntakeWorkspace({
             >
               Rebuild preview
             </button>
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              ['intake', 'Intake review'],
+              ['review', 'Contract review'],
+              ['release', 'Release readiness'],
+              ['published', 'Published'],
+            ].map(([step, label]) => {
+              const orderedSteps = ['intake', 'review', 'release', 'published'];
+              const isActive = workflow.step === step;
+              const isReached = orderedSteps.indexOf(workflow.step) >= orderedSteps.indexOf(step);
+
+              return (
+                <div
+                  key={step}
+                  className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.16em] ${
+                    isActive
+                      ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                      : isReached
+                        ? 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                        : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+                  }`}
+                >
+                  {label}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -312,6 +378,7 @@ export function PublisherIntakeWorkspace({
 
             <PublisherReleaseWorkspace
               status={status}
+              workflow={workflow}
               checks={checks}
               buildHistory={buildHistory}
               onOpenChecks={onOpenChecks}
@@ -323,6 +390,62 @@ export function PublisherIntakeWorkspace({
           </div>
 
           <div className="flex min-h-0 flex-col gap-4">
+            {selectedPage && selectedDraft ? (
+              <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                      Compare surfaces
+                    </div>
+                    <div className="mt-1 text-sm text-bolt-elements-textPrimary">
+                      Trace issues from source to contract to generated output without leaving Publisher Mode.
+                    </div>
+                    <div className="mt-1 text-xs text-bolt-elements-textSecondary">
+                      Source stays authoritative, contract holds structured edits, output confirms render behavior.
+                    </div>
+                  </div>
+                  <div className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                    {selectedPage.path}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => selectedDraft.sourcePath && onOpenSourceFile?.(selectedDraft.sourcePath)}
+                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-left text-xs hover:bg-bolt-elements-background-depth-3 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!selectedDraft.sourcePath || !onOpenSourceFile}
+                  >
+                    <div className="font-medium text-bolt-elements-textPrimary">Source</div>
+                    <div className="mt-1 text-bolt-elements-textSecondary">
+                      {selectedDraft.sourceLabel ?? 'Open raw source'}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenContract(selectedPage)}
+                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-left text-xs hover:bg-bolt-elements-background-depth-3"
+                  >
+                    <div className="font-medium text-bolt-elements-textPrimary">Contract</div>
+                    <div className="mt-1 text-bolt-elements-textSecondary">
+                      Open `{selectedPage.slug}.json` for structured edits
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenOutput?.(selectedPage)}
+                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-left text-xs hover:bg-bolt-elements-background-depth-3 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!onOpenOutput}
+                  >
+                    <div className="font-medium text-bolt-elements-textPrimary">Output</div>
+                    <div className="mt-1 text-bolt-elements-textSecondary">
+                      Inspect generated HTML for `{selectedPage.path}`
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {selectedDraft ? (
               <IntakePageEditor
                 draft={selectedDraft}
@@ -353,8 +476,8 @@ export function PublisherIntakeWorkspace({
                   }
                 }}
                 onOpenSource={() => {
-                  if (selectedPage) {
-                    onSelectPage(selectedPage.id);
+                  if (selectedDraft?.sourcePath) {
+                    onOpenSourceFile?.(selectedDraft.sourcePath);
                   }
                 }}
               />
@@ -376,6 +499,115 @@ export function PublisherIntakeWorkspace({
               onPreviousPage={onPreviousPage}
               onNextPage={onNextPage}
             />
+
+            {selectedBlockEditStates.length > 0 ? (
+              <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-bolt-elements-textPrimary">Constrained block editing</h4>
+                    <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                      Safe block props can be edited in the page contract. Reserved metadata and invalid composition
+                      stay blocked here on purpose.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => selectedPage && onOpenContract(selectedPage)}
+                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3"
+                  >
+                    Open page contract
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {selectedBlockEditStates.map(({ slot, zone, state }) =>
+                    state ? (
+                      <div
+                        key={`${zone}-${slot.id}`}
+                        className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-medium text-bolt-elements-textPrimary">{state.blockName}</div>
+                            <div className="mt-1 text-xs text-bolt-elements-textSecondary">
+                              {slot.id} · {zone}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em]">
+                            <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-1 text-green-300">
+                              {state.editableFields.length} editable
+                            </span>
+                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-300">
+                              {state.blockedFields.length} blocked
+                            </span>
+                          </div>
+                        </div>
+
+                        {state.warnings.length ? (
+                          <div className="mt-3 space-y-2">
+                            {state.warnings.map((warning) => (
+                              <div
+                                key={warning}
+                                className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                              >
+                                {warning}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {state.editableFields.length ? (
+                          <div className="mt-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                              Safe fields
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {state.editableFields.map((field) => (
+                                <span
+                                  key={field.key}
+                                  className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-2 py-1 text-[11px] text-bolt-elements-textSecondary"
+                                >
+                                  {field.label}
+                                  {field.required ? ' *' : ''}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {state.blockedFields.length ? (
+                          <div className="mt-3 space-y-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                              Blocked fields
+                            </div>
+                            {state.blockedFields.map((field) => (
+                              <div
+                                key={field.key}
+                                className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 text-xs"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-medium text-bolt-elements-textPrimary">{field.label}</span>
+                                  {field.reason ? (
+                                    <span className="rounded-full border border-bolt-elements-borderColor px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                                      {getPublisherEditingConstraintLabel(field.reason)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {field.reason ? (
+                                  <div className="mt-1 text-bolt-elements-textSecondary">
+                                    {getPublisherEditingConstraintDescription(field.reason)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null,
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <IntakeSourcePane

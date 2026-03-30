@@ -26,6 +26,24 @@ import {
 } from './validator';
 import type { PublisherBlockRegistry } from './block-registry';
 
+export interface PublisherSlotEditField {
+  key: string;
+  label: string;
+  value: unknown;
+  editable: boolean;
+  required?: boolean;
+  reason?: 'ownership' | 'composition';
+}
+
+export interface PublisherSlotEditState {
+  blockName: string;
+  zoneValid: boolean;
+  deprecated: boolean;
+  editableFields: PublisherSlotEditField[];
+  blockedFields: PublisherSlotEditField[];
+  warnings: string[];
+}
+
 export const reservedPublisherMetadataKeys = [
   'canonical',
   'canonicalurl',
@@ -171,6 +189,86 @@ function validateSlotContract(
   }
 
   return reports;
+}
+
+export function describePublisherSlotEditing(
+  page: PageContract,
+  zone: ZoneType,
+  slot: SlotContract,
+  registry: PublisherBlockRegistry,
+): PublisherSlotEditState | undefined {
+  const block = registry.getNormalizedMeta(slot.blockId);
+
+  if (!block) {
+    return undefined;
+  }
+
+  const slotDefinitionKeys = new Set(block.slots.map((definition) => definition.key));
+  const editableFields: PublisherSlotEditField[] = [];
+  const blockedFields: PublisherSlotEditField[] = [];
+  const warnings: string[] = [];
+  const allowedZones = registry.getAllowedZones(slot.blockId);
+  const zoneValid = allowedZones.includes(zone);
+
+  if (!zoneValid) {
+    warnings.push(`Invalid composition: ${block.name} only supports ${allowedZones.join(', ')}.`);
+  }
+
+  if (block.deprecation?.status === 'deprecated') {
+    warnings.push(
+      block.deprecation.message ??
+        `Deprecated block. Prefer ${block.deprecation.replacementBlockId ?? 'the recommended replacement'}.`,
+    );
+  }
+
+  for (const definition of block.slots) {
+    const field: PublisherSlotEditField = {
+      key: definition.key,
+      label: definition.label,
+      value: slot.props[definition.key],
+      editable: !isReservedPublisherMetadataKey(definition.key),
+      required: definition.required,
+    };
+
+    if (!field.editable) {
+      field.reason = 'ownership';
+      blockedFields.push(field);
+      continue;
+    }
+
+    editableFields.push(field);
+  }
+
+  for (const [key, value] of Object.entries(slot.props)) {
+    if (slotDefinitionKeys.has(key)) {
+      continue;
+    }
+
+    blockedFields.push({
+      key,
+      label: key,
+      value,
+      editable: false,
+      reason: isReservedPublisherMetadataKey(key) ? 'ownership' : 'composition',
+    });
+  }
+
+  const missingRequiredProps = editableFields.filter(
+    (field) => field.required && (field.value === undefined || field.value === null || `${field.value}`.trim() === ''),
+  );
+
+  if (missingRequiredProps.length > 0) {
+    warnings.push(`Missing required props: ${missingRequiredProps.map((field) => field.key).join(', ')}.`);
+  }
+
+  return {
+    blockName: block.name,
+    zoneValid,
+    deprecated: block.deprecation?.status === 'deprecated',
+    editableFields,
+    blockedFields,
+    warnings,
+  };
 }
 
 function validateZoneCardinality(

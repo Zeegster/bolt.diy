@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PublisherBlockRegistry, publisherBlockRegistry } from './block-registry';
-import { loadPublisherState } from './contracts';
+import { describePublisherSlotEditing, loadPublisherState } from './contracts';
 import { assemblePublisherProject } from './assembler';
 import { runPublisherChecks } from './checker';
 import { buildCanonicalUrl } from './metadata';
+import { derivePublisherWorkflowState } from './status';
+import { buildIntakePageChecks } from './intake';
+import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
 import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from './prompt-context';
 import type { FileMap } from '~/lib/stores/files';
@@ -373,5 +376,249 @@ describe('publisher workflow', () => {
     expect(publisherPrompt).toContain('schema JSON-LD');
     expect(pagePrompt).toContain('Do not invent new zones');
     expect(slotPrompt).toContain('reserved metadata keys');
+  });
+
+  it('derives intake review workflow state from unapplied intake sessions', () => {
+    const workflow = derivePublisherWorkflowState({
+      intakeSession: {
+        id: 'session-1',
+        createdAt: '2026-03-30T00:00:00.000Z',
+        updatedAt: '2026-03-30T00:00:00.000Z',
+        sourceLabel: 'Imported docs',
+        importKind: 'document',
+        status: 'reviewing',
+        scenario: 'document-import',
+        activeContentFamily: 'document',
+        project: {
+          name: 'Demo',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+        },
+        sources: [],
+        pages: [],
+        shellCandidatePaths: [],
+        blockLibraryPaths: [],
+        warnings: [],
+        checks: [],
+        scriptRuns: [],
+      },
+      checks: [],
+    });
+
+    expect(workflow.status).toBe('intake-review');
+    expect(workflow.step).toBe('intake');
+    expect(workflow.nextAction).toContain('Resolve intake ambiguity');
+  });
+
+  it('derives contract review workflow state from working check failures', () => {
+    const workflow = derivePublisherWorkflowState({
+      checks: [
+        {
+          name: 'missing-zone',
+          status: 'fail',
+          message: 'Missing header',
+          gate: 'working',
+        },
+      ],
+    });
+
+    expect(workflow.status).toBe('contract-ready');
+    expect(workflow.step).toBe('review');
+    expect(workflow.blockingReason).toContain('1 working check');
+  });
+
+  it('derives release readiness workflow state from successful builds', () => {
+    const workflow = derivePublisherWorkflowState({
+      checks: [],
+      lastBuild: {
+        id: 'build-1',
+        createdAt: '2026-03-30T00:00:00.000Z',
+        status: 'release-ready',
+        stage: 'export',
+        workingFailures: 0,
+        releaseFailures: 0,
+        warningCount: 0,
+        artifacts: [],
+      },
+    });
+
+    expect(workflow.status).toBe('release-ready');
+    expect(workflow.step).toBe('release');
+    expect(workflow.nextAction).toContain('Inspect artifacts');
+  });
+
+  it('derives failed workflow state from release blockers', () => {
+    const workflow = derivePublisherWorkflowState({
+      checks: [
+        {
+          name: 'canonical-url',
+          status: 'fail',
+          message: 'Missing canonical URL',
+          gate: 'release',
+        },
+      ],
+    });
+
+    expect(workflow.status).toBe('failed');
+    expect(workflow.step).toBe('release');
+    expect(workflow.blockingReason).toContain('1 release blocking');
+  });
+
+  it('builds repair-oriented review drafts from intake pages', () => {
+    const reviewDraft = createIntakeReviewDraft(
+      {
+        id: 'pricing',
+        name: 'Pricing',
+        sourcePath: 'content/pricing.md',
+        sourceFamily: 'document',
+        role: 'article',
+        slug: 'pricing',
+        path: '/pricing/',
+        title: '',
+        description: '',
+        h1: '',
+        sections: [],
+        seo: undefined,
+        checks: [
+          {
+            id: 'missing-page-title',
+            severity: 'fail',
+            message: 'Page pricing is missing a title.',
+          },
+          {
+            id: 'missing-page-sections',
+            severity: 'fail',
+            message: 'Page pricing does not contain any extracted sections.',
+          },
+        ],
+        warnings: [{ code: 'parser-warning', message: 'Broken markdown list.', severity: 'warn' }],
+        confidence: 0.42,
+      },
+      {
+        sourcePath: 'content/pricing.md',
+        label: 'pricing.md',
+        kind: 'document',
+        rawContent: '# Pricing\n\nBroken list',
+      },
+    );
+
+    expect(reviewDraft.missingFields).toEqual(['title', 'description', 'h1']);
+    expect(reviewDraft.metadataIssueCount).toBe(1);
+    expect(reviewDraft.extractionIssueCount).toBe(2);
+    expect(reviewDraft.repairSummary).toContain('title, description, h1');
+    expect(reviewDraft.repairGuidance).toContain('Reserved head metadata');
+    expect(reviewDraft.status).toBe('needs-review');
+  });
+
+  it('emits actionable repair details for missing metadata and extraction gaps', () => {
+    const checks = buildIntakePageChecks({
+      id: 'pricing',
+      name: 'Pricing',
+      sourcePath: 'content/pricing.md',
+      sourceFamily: 'document',
+      role: 'article',
+      slug: 'pricing',
+      path: '/pricing/',
+      title: '',
+      description: '',
+      h1: '',
+      sections: [],
+      seo: undefined,
+      checks: [],
+      warnings: [],
+      confidence: 0.5,
+    });
+
+    expect(checks.find((check) => check.id === 'missing-page-title')?.details).toContain(
+      'Repair the page title in intake review before applying the import.',
+    );
+    expect(checks.find((check) => check.id === 'missing-page-sections')?.details).toContain(
+      'Open the source preview and add or regenerate sections for this page.',
+    );
+    expect(checks.find((check) => check.id === 'low-confidence-extraction')?.details).toContain(
+      'Compare extracted sections with the source preview.',
+    );
+  });
+
+  it('groups publisher diagnostics into operator-facing categories', () => {
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'metadata-completeness',
+        message: 'Page is missing release-grade metadata.',
+        details: ['Repair metadata in intake review or page contract.'],
+      }),
+    ).toBe('metadata');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'metadata-ownership',
+        message: 'Reserved metadata override detected.',
+      }),
+    ).toBe('ownership');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'broken-internal-link',
+        message: 'Generated output references an unknown internal path.',
+        details: ['Inspect the page contract and generated output.'],
+      }),
+    ).toBe('output');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'missing-zone',
+        message: 'Page contract is missing a required zone.',
+      }),
+    ).toBe('composition');
+  });
+
+  it('describes constrained slot editing boundaries for reserved and invalid props', () => {
+    const state = describePublisherSlotEditing(
+      {
+        id: 'home',
+        slug: 'home',
+        name: 'Home',
+        path: '/',
+        usesProjectShell: true,
+        zones: {
+          content: {
+            slots: [
+              {
+                id: 'hero',
+                blockId: 'hero-centered',
+                props: {
+                  title: 'Publisher Mode',
+                  body: 'Structured editing',
+                  canonicalUrl: 'https://malicious.example',
+                  customScript: 'alert(1)',
+                },
+              },
+            ],
+          },
+        },
+        seo: {
+          title: 'Publisher Mode',
+          description: 'Structured static site generation',
+          schemaType: 'WebPage',
+        },
+      },
+      'content',
+      {
+        id: 'hero',
+        blockId: 'hero-centered',
+        props: {
+          title: 'Publisher Mode',
+          body: 'Structured editing',
+          canonicalUrl: 'https://malicious.example',
+          customScript: 'alert(1)',
+        },
+      },
+      publisherBlockRegistry,
+    );
+
+    expect(state?.editableFields.map((field) => field.key)).toContain('title');
+    expect(state?.blockedFields.find((field) => field.key === 'canonicalUrl')?.reason).toBe('ownership');
+    expect(state?.blockedFields.find((field) => field.key === 'customScript')?.reason).toBe('composition');
   });
 });

@@ -1,4 +1,11 @@
-import type { IntakeCheck, PageContract, PublisherMarkdownSource, ZoneType } from '~/types/publisher';
+import type {
+  CheckReport,
+  IntakeCheck,
+  IntakePageDraft as IntakeReviewPage,
+  PageContract,
+  PublisherMarkdownSource,
+  ZoneType,
+} from '~/types/publisher';
 import { publisherZoneTypes } from '~/types/publisher';
 
 export type IntakeSourceKind = 'document' | 'html';
@@ -35,9 +42,22 @@ export interface IntakePageDraft {
   sourceKind?: IntakeSourceKind;
   warnings: string[];
   status: 'ready' | 'warn' | 'needs-review';
+  missingFields: Array<'title' | 'description' | 'h1'>;
+  repairSummary: string;
+  repairGuidance: string;
+  metadataIssueCount: number;
+  extractionIssueCount: number;
+  contractIssueCount: number;
 }
 
 export type IntakeDiagnosticCategory = 'metadata' | 'zone' | 'ownership' | 'deprecated' | 'content';
+export type PublisherDiagnosticCategory =
+  | 'metadata'
+  | 'composition'
+  | 'ownership'
+  | 'deprecated'
+  | 'output'
+  | 'content';
 
 export function categorizeIntakeCheck(
   check: Pick<IntakeCheck, 'id' | 'message' | 'details'>,
@@ -76,6 +96,132 @@ export function getIntakeDiagnosticLabel(category: IntakeDiagnosticCategory) {
     default:
       return 'Content or contract issue';
   }
+}
+
+export function categorizePublisherDiagnostic(
+  check: Pick<CheckReport, 'name' | 'message' | 'details'>,
+): PublisherDiagnosticCategory {
+  const haystack = [check.name, check.message, ...(check.details ?? [])].join(' ').toLowerCase();
+
+  if (haystack.includes('ownership') || haystack.includes('reserved')) {
+    return 'ownership';
+  }
+
+  if (
+    haystack.includes('canonical') ||
+    haystack.includes('metadata') ||
+    haystack.includes('seo') ||
+    haystack.includes('site-url') ||
+    haystack.includes('robots')
+  ) {
+    return 'metadata';
+  }
+
+  if (haystack.includes('deprecated')) {
+    return 'deprecated';
+  }
+
+  if (
+    haystack.includes('sitemap') ||
+    haystack.includes('manifest') ||
+    haystack.includes('artifact') ||
+    haystack.includes('image') ||
+    haystack.includes('link') ||
+    haystack.includes('output')
+  ) {
+    return 'output';
+  }
+
+  if (
+    haystack.includes('zone') ||
+    haystack.includes('slot') ||
+    haystack.includes('navigation') ||
+    haystack.includes('token') ||
+    haystack.includes('page') ||
+    haystack.includes('contract')
+  ) {
+    return 'composition';
+  }
+
+  return 'content';
+}
+
+export function getPublisherDiagnosticLabel(category: PublisherDiagnosticCategory) {
+  switch (category) {
+    case 'metadata':
+      return 'Metadata and SEO';
+    case 'composition':
+      return 'Contract composition';
+    case 'ownership':
+      return 'Ownership boundary';
+    case 'deprecated':
+      return 'Deprecated blocks';
+    case 'output':
+      return 'Generated output';
+    default:
+      return 'Content quality';
+  }
+}
+
+export function getPublisherEditingConstraintLabel(reason: 'ownership' | 'composition') {
+  return reason === 'ownership' ? 'Reserved by metadata ownership' : 'Blocked by contract composition';
+}
+
+export function getPublisherEditingConstraintDescription(reason: 'ownership' | 'composition') {
+  return reason === 'ownership'
+    ? 'This field stays under page/project metadata ownership and is not editable through block props.'
+    : 'This field is outside the block schema or invalid for the current zone, so the contract must be repaired first.';
+}
+
+function isMetadataCheck(check: IntakeCheck) {
+  return (
+    categorizeIntakeCheck(check) === 'metadata' ||
+    check.id === 'missing-page-title' ||
+    check.id === 'missing-page-description' ||
+    check.id === 'missing-page-h1'
+  );
+}
+
+function isExtractionCheck(check: IntakeCheck) {
+  return (
+    categorizeIntakeCheck(check) === 'content' ||
+    check.id === 'missing-page-sections' ||
+    check.id === 'low-confidence-extraction' ||
+    check.id === 'page-warnings'
+  );
+}
+
+function buildRepairSummary(
+  missingFields: Array<'title' | 'description' | 'h1'>,
+  metadataIssueCount: number,
+  extractionIssueCount: number,
+  contractIssueCount: number,
+) {
+  if (missingFields.length > 0) {
+    return `Repair ${missingFields.join(', ')} before applying this page.`;
+  }
+
+  if (extractionIssueCount > 0) {
+    return 'Compare extracted sections with the source preview before applying the import.';
+  }
+
+  if (contractIssueCount > 0 || metadataIssueCount > 0) {
+    return 'Resolve the remaining review diagnostics before moving to release.';
+  }
+
+  return 'Page metadata and extracted content are ready for operator review.';
+}
+
+function buildRepairGuidance(metadataIssueCount: number, extractionIssueCount: number) {
+  if (metadataIssueCount > 0) {
+    return 'Edit title, description, and H1 here. Reserved head metadata stays contract-owned and is not repaired via block props.';
+  }
+
+  if (extractionIssueCount > 0) {
+    return 'Keep the source preview open while you repair sections so edits stay anchored to the original document.';
+  }
+
+  return 'Use this page editor for operator-level metadata and content repair only.';
 }
 
 function valueToText(value: unknown) {
@@ -134,9 +280,19 @@ export function createIntakePageDraft(page: PageContract, source?: IntakeSourceR
   const description = page.seo.description ?? '';
   const h1 = page.name || title;
   const warnings: string[] = [];
+  const missingFields: Array<'title' | 'description' | 'h1'> = [];
+
+  if (!title.trim()) {
+    missingFields.push('title');
+  }
 
   if (!description.trim()) {
+    missingFields.push('description');
     warnings.push('Description is missing.');
+  }
+
+  if (!h1.trim()) {
+    missingFields.push('h1');
   }
 
   if (sections.every((section) => !section.content.trim())) {
@@ -162,6 +318,86 @@ export function createIntakePageDraft(page: PageContract, source?: IntakeSourceR
     sourceKind: source?.kind,
     warnings,
     status: warnings.length > 1 ? 'needs-review' : warnings.length === 1 ? 'warn' : 'ready',
+    missingFields,
+    repairSummary: buildRepairSummary(missingFields, missingFields.length, warnings.length, 0),
+    repairGuidance: buildRepairGuidance(missingFields.length, warnings.length),
+    metadataIssueCount: missingFields.length,
+    extractionIssueCount: warnings.length,
+    contractIssueCount: 0,
+  };
+}
+
+export function createIntakeReviewDraft(page: IntakeReviewPage, source?: IntakeSourceReference): IntakePageDraft {
+  const sections = page.sections.map((section, index) => ({
+    id: section.id,
+    heading: section.heading ?? `${page.name} · ${index + 1}`,
+    content: section.content,
+  }));
+  const missingFields: Array<'title' | 'description' | 'h1'> = [];
+
+  if (!page.title.trim()) {
+    missingFields.push('title');
+  }
+
+  if (!page.description?.trim()) {
+    missingFields.push('description');
+  }
+
+  if (!page.h1?.trim()) {
+    missingFields.push('h1');
+  }
+
+  const metadataIssueCount = page.checks.filter(isMetadataCheck).length;
+  const extractionIssueCount = page.checks.filter(isExtractionCheck).length;
+  const contractIssueCount = page.checks.length - metadataIssueCount - extractionIssueCount;
+  const warnings = [...page.warnings.map((warning) => warning.message), ...(source?.warnings ?? [])];
+
+  return {
+    pageId: page.id,
+    slug: page.slug,
+    path: page.path,
+    name: page.name,
+    title: page.title,
+    description: page.description ?? '',
+    h1: page.h1 ?? '',
+    sections,
+    rawSource:
+      source?.rawContent ??
+      page.rawSourcePreview ??
+      page.bodyHtml ??
+      sections.map((section) => section.content).join('\n\n'),
+    sourcePath: source?.sourcePath ?? page.storedSourcePath ?? page.sourcePath,
+    sourceLabel: source?.label ?? page.sourcePath.split('/').pop() ?? page.name,
+    sourceKind: source?.kind ?? page.sourceFamily,
+    warnings,
+    status:
+      page.checks.some((check) => check.severity === 'fail') || warnings.length > 1
+        ? 'needs-review'
+        : page.checks.length > 0 || warnings.length === 1
+          ? 'warn'
+          : 'ready',
+    missingFields,
+    repairSummary: buildRepairSummary(missingFields, metadataIssueCount, extractionIssueCount, contractIssueCount),
+    repairGuidance: buildRepairGuidance(metadataIssueCount, extractionIssueCount),
+    metadataIssueCount,
+    extractionIssueCount,
+    contractIssueCount,
+  };
+}
+
+export function applyIntakeReviewDraft(page: IntakeReviewPage, draft: IntakePageDraft): IntakeReviewPage {
+  return {
+    ...page,
+    title: draft.title,
+    description: draft.description,
+    h1: draft.h1,
+    sections: draft.sections.map((section, index) => ({
+      ...page.sections[index],
+      id: section.id,
+      kind: page.sections[index]?.kind ?? 'paragraph',
+      heading: section.heading,
+      content: section.content,
+    })),
   };
 }
 

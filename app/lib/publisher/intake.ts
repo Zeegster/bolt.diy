@@ -513,7 +513,9 @@ export function buildIntakePageChecks(page: IntakePageDraft): IntakeCheck[] {
 
   if (!page.title.trim()) {
     checks.push(
-      createCheck('missing-page-title', `Page ${page.id} is missing a title.`, 'fail', page.id, page.sourcePath),
+      createCheck('missing-page-title', `Page ${page.id} is missing a title.`, 'fail', page.id, page.sourcePath, [
+        'Repair the page title in intake review before applying the import.',
+      ]),
     );
   }
 
@@ -525,12 +527,17 @@ export function buildIntakePageChecks(page: IntakePageDraft): IntakeCheck[] {
         'warn',
         page.id,
         page.sourcePath,
+        ['Add a source-grounded summary in intake review.'],
       ),
     );
   }
 
   if (!page.h1?.trim()) {
-    checks.push(createCheck('missing-page-h1', `Page ${page.id} is missing an H1.`, 'fail', page.id, page.sourcePath));
+    checks.push(
+      createCheck('missing-page-h1', `Page ${page.id} is missing an H1.`, 'fail', page.id, page.sourcePath, [
+        'Repair the main heading in intake review before continuing.',
+      ]),
+    );
   }
 
   if (page.sections.length === 0) {
@@ -541,6 +548,7 @@ export function buildIntakePageChecks(page: IntakePageDraft): IntakeCheck[] {
         'fail',
         page.id,
         page.sourcePath,
+        ['Open the source preview and add or regenerate sections for this page.'],
       ),
     );
   }
@@ -553,7 +561,7 @@ export function buildIntakePageChecks(page: IntakePageDraft): IntakeCheck[] {
         'warn',
         page.id,
         page.sourcePath,
-        [`Confidence: ${page.confidence.toFixed(2)}`],
+        [`Confidence: ${page.confidence.toFixed(2)}`, 'Compare extracted sections with the source preview.'],
       ),
     );
   }

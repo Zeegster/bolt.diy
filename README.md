@@ -115,6 +115,8 @@ Publisher Mode uses a strict contract boundary so generated sites stay determini
 - Block placement must respect registry zone rules and required slot props before output is trusted.
 - App-owned metadata stays outside block slot props. Reserved ownership includes `canonical`, `robots`, `schema`, `schemaType`, `jsonLd`, `favicon`, `metaImage`, and raw `head` payloads.
 - Page and project contracts remain the only valid sources for canonical URLs, robots directives, JSON-LD, and other `<head>` concerns.
+- Publisher Mode exposes constrained block editing only for contract-safe block props. Safe fields are shown in contract review, while reserved metadata and invalid composition are explained as blocked before release.
+- Invalid composition prevention is visible in the review UX: zone violations, unsupported props, missing required props, and deprecated blocks are surfaced as operator guidance instead of hidden until publish time.
 
 ## Setup
 

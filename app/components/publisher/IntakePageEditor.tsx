@@ -105,6 +105,41 @@ export function IntakePageEditor({
         </div>
       </div>
 
+      <div className="mt-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+              Source-of-truth repair
+            </div>
+            <p className="text-sm text-bolt-elements-textPrimary">{draft.repairSummary}</p>
+            <p className="text-xs text-bolt-elements-textSecondary">{draft.repairGuidance}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full border border-bolt-elements-borderColor px-2 py-1 text-bolt-elements-textSecondary">
+              Metadata {draft.metadataIssueCount}
+            </span>
+            <span className="rounded-full border border-bolt-elements-borderColor px-2 py-1 text-bolt-elements-textSecondary">
+              Extraction {draft.extractionIssueCount}
+            </span>
+            <span className="rounded-full border border-bolt-elements-borderColor px-2 py-1 text-bolt-elements-textSecondary">
+              Contract {draft.contractIssueCount}
+            </span>
+          </div>
+        </div>
+        {draft.missingFields.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {draft.missingFields.map((field) => (
+              <span
+                key={field}
+                className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300"
+              >
+                Missing {field}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <label className="flex flex-col gap-2 text-sm">
           <span className="text-bolt-elements-textSecondary">Title</span>
@@ -124,6 +159,9 @@ export function IntakePageEditor({
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="Short summary"
           />
+          <span className="text-[11px] text-bolt-elements-textTertiary">
+            Keep this tied to the source summary. Canonical, robots, and schema metadata stay outside block props.
+          </span>
         </label>
 
         <label className="flex flex-col gap-2 text-sm xl:col-span-2">

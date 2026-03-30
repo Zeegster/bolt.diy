@@ -14,6 +14,7 @@ export type PublisherProjectStatus =
   | 'release-ready'
   | 'published'
   | 'failed';
+export type PublisherWorkflowStep = 'intake' | 'review' | 'release' | 'published';
 export type WorkspaceMode = 'default' | 'publisher';
 export type PublisherStage = 'onboarding' | 'intake' | 'structure';
 export type ActiveContentFamily = 'document' | 'html';
@@ -472,6 +473,15 @@ export interface PublisherJob {
   finishedAt?: string;
   projectId?: string;
   details?: string[];
+}
+
+export interface PublisherWorkflowState {
+  status: PublisherProjectStatus;
+  step: PublisherWorkflowStep;
+  label: string;
+  summary: string;
+  nextAction: string;
+  blockingReason?: string;
 }
 
 export interface LoadedPublisherState {

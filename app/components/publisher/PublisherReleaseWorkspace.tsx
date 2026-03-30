@@ -1,4 +1,10 @@
-import type { CheckReport, PublisherBuildSummary, PublisherProjectStatus } from '~/types/publisher';
+import type {
+  CheckReport,
+  PublisherBuildSummary,
+  PublisherProjectStatus,
+  PublisherWorkflowState,
+} from '~/types/publisher';
+import { categorizePublisherDiagnostic, getPublisherDiagnosticLabel } from '~/lib/publisher/intake-ui';
 
 const statusOrder: PublisherProjectStatus[] = [
   'draft',
@@ -20,8 +26,33 @@ function getCheckTone(status: CheckReport['status']) {
   return 'border-red-500/20 bg-red-500/10 text-red-200';
 }
 
+function getTargetSummary(check: CheckReport) {
+  if (check.pageId && check.zone) {
+    return `${check.pageId} · ${check.zone}`;
+  }
+
+  if (check.pageId) {
+    return check.pageId;
+  }
+
+  return 'project';
+}
+
+function groupChecks(checks: CheckReport[]) {
+  const order = ['metadata', 'composition', 'ownership', 'deprecated', 'output', 'content'] as const;
+
+  return order
+    .map((category) => ({
+      category,
+      label: getPublisherDiagnosticLabel(category),
+      checks: checks.filter((check) => categorizePublisherDiagnostic(check) === category),
+    }))
+    .filter((group) => group.checks.length > 0);
+}
+
 interface PublisherReleaseWorkspaceProps {
   status: PublisherProjectStatus;
+  workflow: PublisherWorkflowState;
   checks: CheckReport[];
   buildHistory: PublisherBuildSummary[];
   onOpenChecks?: () => void;
@@ -33,6 +64,7 @@ interface PublisherReleaseWorkspaceProps {
 
 export function PublisherReleaseWorkspace({
   status,
+  workflow,
   checks,
   buildHistory,
   onOpenChecks,
@@ -42,8 +74,38 @@ export function PublisherReleaseWorkspace({
   onOpenRobots,
 }: PublisherReleaseWorkspaceProps) {
   const latestBuild = buildHistory[0];
-  const workingChecks = checks.filter((check) => check.gate !== 'release').slice(0, 3);
   const releaseChecks = checks.filter((check) => check.gate === 'release');
+  const workingChecks = checks.filter((check) => check.gate !== 'release');
+  const releaseFailures = releaseChecks.filter((check) => check.status === 'fail');
+  const releaseWarnings = releaseChecks.filter((check) => check.status === 'warn');
+  const workingFailures = workingChecks.filter((check) => check.status === 'fail');
+  const workingWarnings = workingChecks.filter((check) => check.status === 'warn');
+  const groupedPanels = [
+    {
+      key: 'release-failures',
+      title: 'Release blockers',
+      description: 'Fix these before trusting generated output.',
+      checks: releaseFailures,
+    },
+    {
+      key: 'release-warnings',
+      title: 'Release warnings',
+      description: 'Output is generated, but these items still deserve operator review.',
+      checks: releaseWarnings,
+    },
+    {
+      key: 'working-failures',
+      title: 'Working blockers',
+      description: 'Contract issues that prevent a clean handoff into release.',
+      checks: workingFailures,
+    },
+    {
+      key: 'working-warnings',
+      title: 'Working warnings',
+      description: 'Composition concerns that may become release problems later.',
+      checks: workingWarnings,
+    },
+  ].filter((panel) => panel.checks.length > 0);
 
   return (
     <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
@@ -52,6 +114,11 @@ export function PublisherReleaseWorkspace({
           <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Release workspace</h3>
           <p className="mt-1 text-xs text-bolt-elements-textSecondary">
             Deterministic release checks, build history, and generated output readiness.
+          </p>
+          <p className="mt-2 text-sm text-bolt-elements-textPrimary">{workflow.summary}</p>
+          <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+            Next action: {workflow.nextAction}
+            {workflow.blockingReason ? ` · Blocker: ${workflow.blockingReason}` : ''}
           </p>
         </div>
         <div className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
@@ -124,37 +191,51 @@ export function PublisherReleaseWorkspace({
         </button>
       </div>
 
-      {releaseChecks.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-bolt-elements-textSecondary">Release checks</div>
-          {releaseChecks.slice(0, 4).map((check) => (
-            <div
-              key={`${check.name}-${check.pageId ?? 'project'}-${check.message}`}
-              className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{check.name}</span>
-                <span className="uppercase tracking-[0.16em]">{check.status}</span>
+      {groupedPanels.length > 0 ? (
+        <div className="mt-4 space-y-4">
+          {groupedPanels.map((panel) => (
+            <div key={panel.key} className="space-y-2">
+              <div>
+                <div className="text-xs uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                  {panel.title}
+                </div>
+                <div className="mt-1 text-xs text-bolt-elements-textSecondary">{panel.description}</div>
               </div>
-              <div className="mt-1 opacity-90">{check.message}</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
 
-      {workingChecks.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-bolt-elements-textSecondary">Working checks</div>
-          {workingChecks.map((check) => (
-            <div
-              key={`${check.name}-${check.pageId ?? 'project'}-${check.message}`}
-              className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{check.name}</span>
-                <span className="uppercase tracking-[0.16em]">{check.status}</span>
-              </div>
-              <div className="mt-1 opacity-90">{check.message}</div>
+              {groupChecks(panel.checks).map((group) => (
+                <div
+                  key={`${panel.key}-${group.category}`}
+                  className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                      {group.label}
+                    </div>
+                    <div className="text-[11px] text-bolt-elements-textSecondary">{group.checks.length} item(s)</div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {group.checks.map((check) => (
+                      <div
+                        key={`${check.name}-${check.pageId ?? 'project'}-${check.message}`}
+                        className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{check.name}</span>
+                          <span className="uppercase tracking-[0.16em]">{check.status}</span>
+                        </div>
+                        <div className="mt-1 opacity-90">{check.message}</div>
+                        <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
+                          Inspect: {getTargetSummary(check)}
+                        </div>
+                        {check.details?.length ? (
+                          <div className="mt-2 opacity-90">{check.details.join(' · ')}</div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>

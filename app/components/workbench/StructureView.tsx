@@ -11,6 +11,7 @@ import { publisherBlockRegistry } from '~/lib/publisher/block-registry';
 import { runPublisherChecks } from '~/lib/publisher/checker';
 import {
   PUBLISHER_CHECKS_FILE,
+  PUBLISHER_GENERATED_DIR,
   PUBLISHER_MANIFEST_FILE,
   PUBLISHER_PROJECT_FILE,
   PUBLISHER_ROBOTS_FILE,
@@ -41,7 +42,7 @@ import {
   savePublisherProjectState,
 } from '~/lib/publisher/persistence';
 import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from '~/lib/publisher/prompt-context';
-import { derivePublisherProjectStatus } from '~/lib/publisher/status';
+import { derivePublisherProjectStatus, derivePublisherWorkflowState } from '~/lib/publisher/status';
 import { shouldWritePublisherFileToProject } from '~/lib/publisher/ui-state';
 import { saveWorkspaceSession } from '~/lib/publisher/workspace-session';
 import { chatStore } from '~/lib/stores/chat';
@@ -197,6 +198,12 @@ function buildSourceSnapshot(referenceState?: PublisherReferenceState) {
   return snapshot;
 }
 
+function getGeneratedPagePath(page: PageContract) {
+  return page.path === '/'
+    ? `${PUBLISHER_GENERATED_DIR}/index.html`
+    : `${PUBLISHER_GENERATED_DIR}${page.path}/index.html`;
+}
+
 export function StructureView() {
   const files = useStore(workbenchStore.files);
   const previewStore = usePreviewStore();
@@ -231,6 +238,16 @@ export function StructureView() {
   const projectStatus = useMemo(
     () =>
       derivePublisherProjectStatus({
+        intakeSession: intakeDraft,
+        checks,
+        lastBuild: buildHistory[0],
+        currentStatus: persistedProjectState?.status,
+      }),
+    [buildHistory, checks, intakeDraft, persistedProjectState?.status],
+  );
+  const publisherWorkflow = useMemo(
+    () =>
+      derivePublisherWorkflowState({
         intakeSession: intakeDraft,
         checks,
         lastBuild: buildHistory[0],
@@ -984,6 +1001,7 @@ export function StructureView() {
       markdownSources={persistedProjectState?.markdownSources}
       referenceState={publisherState.referenceState ?? persistedProjectState?.referenceState}
       status={projectStatus}
+      workflow={publisherWorkflow}
       buildHistory={buildHistory}
       selectedPageId={selectedPage?.id}
       sourceContentByPath={sourceContentByPath}
@@ -995,6 +1013,8 @@ export function StructureView() {
       onOpenTheme={() => openFile(PUBLISHER_THEME_FILE)}
       onOpenChecks={() => openFile(PUBLISHER_CHECKS_FILE)}
       onOpenReferences={() => openFile(PUBLISHER_REFERENCES_FILE)}
+      onOpenSourceFile={(filePath: string) => openFile(filePath)}
+      onOpenOutput={(page: PageContract) => openFile(getGeneratedPagePath(page))}
       onOpenState={() => openFile(PUBLISHER_STATE_FILE)}
       onOpenManifest={() => openFile(PUBLISHER_MANIFEST_FILE)}
       onOpenSitemap={() => openFile(PUBLISHER_SITEMAP_FILE)}

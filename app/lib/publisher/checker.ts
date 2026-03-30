@@ -234,7 +234,10 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
                 name: 'broken-internal-link',
                 status: 'fail',
                 message: `Block "${block.name}" references an unknown internal path.`,
-                details: [`${page.name}/${slot.id}/${key}: ${value}`],
+                details: [
+                  `${page.name}/${slot.id}/${key}: ${value}`,
+                  `Inspect the page contract for ${page.id} and the generated output for ${page.path}.`,
+                ],
                 pageId: page.id,
                 zone,
               }),
@@ -267,7 +270,10 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
           name: 'metadata-completeness',
           status: 'fail',
           message: `Page "${page.name}" is missing release-grade metadata.`,
-          details: ['Release requires both title and description.'],
+          details: [
+            'Release requires both title and description.',
+            'Repair metadata in intake review or page contract.',
+          ],
           pageId: page.id,
         }),
       );
@@ -279,7 +285,10 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
           name: 'site-url',
           status: 'fail',
           message: `Page "${page.name}" cannot emit an absolute canonical URL because siteUrl is not configured.`,
-          details: ['Set project.siteUrl or save a domain in site settings before release.'],
+          details: [
+            'Set project.siteUrl or save a domain in site settings before release.',
+            'Inspect project.json or Publisher site settings.',
+          ],
           pageId: page.id,
         }),
       );

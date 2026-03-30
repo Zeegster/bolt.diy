@@ -3,15 +3,20 @@ import { CodeMirrorEditor, type EditorDocument } from '~/components/editor/codem
 import { useSettings } from '~/lib/hooks/useSettings';
 import type {
   IntakeImportKind,
-  IntakePageDraft,
   IntakeCheck,
+  IntakePageDraft,
   IntakeProjectDraft,
-  IntakeSectionDraft,
   IntakeSession,
   IntakeWarning,
 } from '~/types/publisher';
-import { categorizeIntakeCheck, getIntakeDiagnosticLabel } from '~/lib/publisher/intake-ui';
+import {
+  applyIntakeReviewDraft,
+  categorizeIntakeCheck,
+  createIntakeReviewDraft,
+  getIntakeDiagnosticLabel,
+} from '~/lib/publisher/intake-ui';
 import { IntakeAssetField } from './IntakeAssetField';
+import { IntakePageEditor } from './IntakePageEditor';
 
 interface PublisherIntakeReviewWorkspaceProps {
   session: IntakeSession;
@@ -44,10 +49,6 @@ function getWarningClasses(warning: IntakeWarning['severity']) {
   }
 
   return 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary';
-}
-
-function updateSection(sections: IntakeSectionDraft[], sectionId: string, patch: Partial<IntakeSectionDraft>) {
-  return sections.map((section) => (section.id === sectionId ? { ...section, ...patch } : section));
 }
 
 function isBrokenMetadataPage(page: IntakePageDraft) {
@@ -97,13 +98,29 @@ export function PublisherIntakeReviewWorkspace({
     : sourceContentByPath[selectedPage?.sourcePath ?? ''];
   const brokenPages = session.pages.filter(isBrokenMetadataPage);
   const selectedPageChecks = selectedPage ? session.checks.filter((check) => check.pageId === selectedPage.id) : [];
+  const selectedSourcePath = selectedPage?.storedSourcePath ?? selectedPage?.sourcePath;
   const sourceDoc: EditorDocument | undefined = rawSource
     ? {
-        filePath: selectedPage?.storedSourcePath ?? selectedPage?.sourcePath ?? 'intake-source.md',
+        filePath: selectedSourcePath ?? 'intake-source.md',
         value: rawSource,
         isBinary: false,
       }
     : undefined;
+  const selectedDraft = useMemo(() => {
+    if (!selectedPage) {
+      return undefined;
+    }
+
+    return createIntakeReviewDraft(selectedPage, {
+      sourcePath: selectedSourcePath ?? selectedPage.sourcePath,
+      label: selectedSourcePath?.split('/').pop() ?? selectedPage.name,
+      kind: selectedPage.sourceFamily,
+      rawContent: rawSource,
+      pageId: selectedPage.id,
+      pagePath: selectedPage.path,
+      warnings: selectedPage.warnings.map((warning) => warning.message),
+    });
+  }, [rawSource, selectedPage, selectedSourcePath]);
   const pageSelectionSummary = useMemo(() => {
     if (brokenPages.length === 0) {
       return 'No broken pages';
@@ -407,129 +424,64 @@ export function PublisherIntakeReviewWorkspace({
                 )}
               </div>
             </div>
+
+            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+              <h4 className="text-sm font-semibold">Editing boundary</h4>
+              <div className="mt-3 space-y-2 text-xs text-bolt-elements-textSecondary">
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Intake review only repairs source-derived metadata and extracted content. Safe block prop edits happen
+                  later in contract review.
+                </div>
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Canonical URLs, robots, schema, favicon, meta images, and raw head payloads stay blocked because they
+                  are app-owned metadata.
+                </div>
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Zone violations or unsupported block fields are treated as composition problems, so review explains
+                  them before release checks fail.
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+              <h4 className="text-sm font-semibold">Current page diagnostics</h4>
+              <div className="mt-3 space-y-2">
+                {selectedPageChecks.length > 0 ? (
+                  selectedPageChecks.map((check) => (
+                    <div
+                      key={`${check.id}-${check.message}`}
+                      className={`rounded-lg border px-3 py-2 text-xs ${formatCheckTone(check)}`}
+                    >
+                      <div className="mb-1 inline-flex rounded-full border border-current/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]">
+                        {getCheckCategoryBadge(check)}
+                      </div>
+                      <div className="font-medium">{check.message}</div>
+                      {check.details?.length ? <div className="mt-1">{check.details.join(' · ')}</div> : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+                    This page has no outstanding intake diagnostics.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold">{selectedPage?.name ?? 'No page selected'}</h3>
-                  <p className="mt-1 text-xs text-bolt-elements-textSecondary">
-                    {selectedPage?.path ?? ''} · {selectedPage?.sourceFamily ?? session.activeContentFamily}
-                  </p>
-                </div>
-                {selectedPage ? (
-                  <button
-                    type="button"
-                    disabled={busyNormalize}
-                    onClick={() => onNormalizeWithAi(selectedPage)}
-                    className="rounded-lg bg-accent-500/15 px-3 py-2 text-sm text-accent-300 hover:bg-accent-500/20 disabled:opacity-60"
-                  >
-                    {busyNormalize ? 'Normalizing…' : 'Normalize with AI'}
-                  </button>
-                ) : null}
+            {selectedPage && selectedDraft ? (
+              <IntakePageEditor
+                draft={selectedDraft}
+                onChange={(next) => onUpdatePage(selectedPage.id, applyIntakeReviewDraft(selectedPage, next))}
+                onNormalizeWithAi={() => onNormalizeWithAi(selectedPage)}
+                onOpenContract={() => onSelectPage(selectedPage.id)}
+                onOpenSource={() => onSelectPage(selectedPage.id)}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4 text-sm text-bolt-elements-textSecondary">
+                No page selected for intake review.
               </div>
-
-              {selectedPage ? (
-                <>
-                  <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <label className="flex flex-col gap-2 text-sm">
-                      <span className="text-bolt-elements-textSecondary">Title</span>
-                      <input
-                        value={selectedPage.title}
-                        onChange={(event) =>
-                          onUpdatePage(selectedPage.id, { ...selectedPage, title: event.target.value })
-                        }
-                        className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-2 text-sm">
-                      <span className="text-bolt-elements-textSecondary">Description</span>
-                      <input
-                        value={selectedPage.description ?? ''}
-                        onChange={(event) =>
-                          onUpdatePage(selectedPage.id, { ...selectedPage, description: event.target.value })
-                        }
-                        className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-2 text-sm xl:col-span-2">
-                      <span className="text-bolt-elements-textSecondary">H1</span>
-                      <input
-                        value={selectedPage.h1 ?? ''}
-                        onChange={(event) => onUpdatePage(selectedPage.id, { ...selectedPage, h1: event.target.value })}
-                        className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="mt-5 space-y-3">
-                    {selectedPageChecks.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-2">
-                        {selectedPageChecks.map((check) => (
-                          <div
-                            key={`${check.id}-${check.message}`}
-                            className={`rounded-lg border px-3 py-2 text-xs ${formatCheckTone(check)}`}
-                          >
-                            <div className="mb-1 inline-flex rounded-full border border-current/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]">
-                              {getCheckCategoryBadge(check)}
-                            </div>
-                            <div className="font-medium">{check.message}</div>
-                            {check.details?.length ? <div className="mt-1">{check.details.join(' · ')}</div> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {selectedPage.sections.map((section, index) => (
-                      <div
-                        key={section.id}
-                        className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3"
-                      >
-                        <div className="mb-3 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
-                          Section {index + 1}
-                        </div>
-                        <div className="grid grid-cols-1 gap-3">
-                          <label className="flex flex-col gap-2 text-sm">
-                            <span className="text-bolt-elements-textSecondary">Heading</span>
-                            <input
-                              value={section.heading ?? ''}
-                              onChange={(event) =>
-                                onUpdatePage(selectedPage.id, {
-                                  ...selectedPage,
-                                  sections: updateSection(selectedPage.sections, section.id, {
-                                    heading: event.target.value,
-                                  }),
-                                })
-                              }
-                              className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2"
-                            />
-                          </label>
-
-                          <label className="flex flex-col gap-2 text-sm">
-                            <span className="text-bolt-elements-textSecondary">Content</span>
-                            <textarea
-                              value={section.content}
-                              onChange={(event) =>
-                                onUpdatePage(selectedPage.id, {
-                                  ...selectedPage,
-                                  sections: updateSection(selectedPage.sections, section.id, {
-                                    content: event.target.value,
-                                  }),
-                                })
-                              }
-                              className="min-h-[160px] rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 font-mono text-xs leading-5"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </div>
+            )}
 
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
