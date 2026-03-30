@@ -6,6 +6,7 @@ import type {
   PublisherReferenceState,
   PublisherSiteSettings,
 } from '~/types/publisher';
+import { PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS } from './constants';
 
 const STORAGE_KEY = 'bolt.publisher.projects';
 
@@ -24,10 +25,53 @@ export interface PersistedPublisherProjectState {
 
 type PersistedPublisherMap = Record<string, PersistedPublisherProjectState>;
 
+function normalizePublisherPipeline(build: PublisherBuildSummary) {
+  const pipeline = build.pipeline;
+
+  if (!pipeline) {
+    return undefined;
+  }
+
+  const publishContractPath = build.publishContractPath ?? pipeline.publishContract.artifactPath;
+  const rollback = pipeline.publishContract.rollback ?? {
+    strategy: 'rebuild' as const,
+    keepLastBuilds: PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS,
+  };
+
+  return {
+    ...pipeline,
+    publishContract: {
+      ...pipeline.publishContract,
+      deliveryStage: pipeline.publishContract.deliveryStage ?? pipeline.deliveryStage,
+      artifactPath: pipeline.publishContract.artifactPath ?? publishContractPath,
+      artifact:
+        pipeline.publishContract.artifact ??
+        (publishContractPath
+          ? {
+              path: publishContractPath,
+              contentType: 'json' as const,
+              schemaVersion: '1.0.0' as const,
+              generatedAt: pipeline.publishContract.generatedAt ?? build.createdAt,
+            }
+          : undefined),
+      rollback: {
+        strategy: 'rebuild',
+        keepLastBuilds: rollback.keepLastBuilds ?? PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS,
+        sourceOfTruth: rollback.sourceOfTruth ?? ['project', 'theme', 'pages', 'references', 'checks'],
+        requiredArtifacts: rollback.requiredArtifacts ?? (publishContractPath ? [publishContractPath] : []),
+      },
+    },
+  };
+}
+
 export function normalizePublisherBuildSummary(build: PublisherBuildSummary): PublisherBuildSummary {
+  const publishContractPath = build.publishContractPath ?? build.pipeline?.publishContract.artifactPath;
+
   return {
     ...build,
+    publishContractPath,
     artifacts: [...(build.artifacts ?? [])].sort((left, right) => left.path.localeCompare(right.path)),
+    pipeline: normalizePublisherPipeline(build),
   };
 }
 

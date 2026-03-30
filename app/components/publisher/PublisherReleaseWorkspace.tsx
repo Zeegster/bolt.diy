@@ -233,6 +233,8 @@ export function PublisherReleaseWorkspace({
   const workflowStage =
     workflow.releaseFailureStage ?? workflow.releaseStage ?? latestBuild?.pipeline?.failedStage ?? latestBuild?.pipeline?.activeStage;
   const workflowStageResult = workflowStage ? pipelineStages.find((stage) => stage.stage === workflowStage) : undefined;
+  const publishContract = latestBuild?.pipeline?.publishContract;
+  const publishContractPath = latestBuild?.publishContractPath ?? publishContract?.artifactPath;
 
   return (
     <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
@@ -361,6 +363,54 @@ export function PublisherReleaseWorkspace({
               {workflowStageResult.blockingReason ? ` · ${workflowStageResult.blockingReason}` : ''}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {publishContract ? (
+        <div className="mt-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs uppercase tracking-[0.16em] text-bolt-elements-textSecondary">Publish contract</div>
+            <div
+              className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${
+                publishContract.canPublish
+                  ? 'border-green-500/20 bg-green-500/10 text-green-300'
+                  : 'border-red-500/20 bg-red-500/10 text-red-200'
+              }`}
+            >
+              {publishContract.canPublish ? 'publishable' : 'blocked'}
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2 text-xs text-bolt-elements-textSecondary">
+            <div className="flex items-center justify-between gap-3">
+              <span>Artifact</span>
+              <span className="truncate text-right text-bolt-elements-textPrimary">
+                {publishContractPath ?? 'not generated'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Delivery stage</span>
+              <span className="text-bolt-elements-textPrimary">{publishContract.deliveryStage ?? 'export'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Build ID</span>
+              <span className="text-bolt-elements-textPrimary">{publishContract.buildId}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Publish blockers</span>
+              <span className="text-bolt-elements-textPrimary">{publishContract.publishBlockers.length}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Publish warnings</span>
+              <span className="text-bolt-elements-textPrimary">{publishContract.publishWarnings.length}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Rollback strategy</span>
+              <span className="text-bolt-elements-textPrimary">
+                {publishContract.rollback.strategy} · keep {publishContract.rollback.keepLastBuilds}
+              </span>
+            </div>
+          </div>
         </div>
       ) : null}
 
