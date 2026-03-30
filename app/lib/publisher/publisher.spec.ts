@@ -265,6 +265,178 @@ describe('publisher workflow', () => {
     expect(checks.some((report) => report.name === 'release-gate' && report.status === 'fail')).toBe(true);
   });
 
+  it('fails release checks when canonical URL is not represented in sitemap output', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'hero',
+                  blockId: 'hero-centered',
+                  props: {
+                    eyebrow: 'Fast static delivery',
+                    title: 'Publisher Mode',
+                    body: 'Zone-first assembly for reusable static sites.',
+                    primaryCtaLabel: 'Start',
+                    primaryCtaHref: '/',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+            canonicalPath: '/landing/',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+
+    expect(checks.some((report) => report.name === 'sitemap-canonical-consistency' && report.status === 'fail')).toBe(
+      true,
+    );
+  });
+
+  it('fails release checks when a block uses unsafe link protocols', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'hero',
+                  blockId: 'hero-centered',
+                  props: {
+                    eyebrow: 'Fast static delivery',
+                    title: 'Publisher Mode',
+                    body: 'Zone-first assembly for reusable static sites.',
+                    primaryCtaLabel: 'Start',
+                    primaryCtaHref: 'javascript:alert(1)',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+
+    expect(checks.some((report) => report.name === 'link-policy' && report.status === 'fail')).toBe(true);
+    expect(checks.some((report) => report.name === 'release-gate' && report.status === 'fail')).toBe(true);
+  });
+
+  it('fails release checks when output references internal publisher asset paths', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'hero',
+                  blockId: 'hero-centered',
+                  props: {
+                    eyebrow: 'Fast static delivery',
+                    title: 'Publisher Mode',
+                    body: 'Zone-first assembly for reusable static sites.',
+                    heroImage: '/.bolt/publisher/assets/hero-logo-a123.png',
+                    primaryCtaLabel: 'Start',
+                    primaryCtaHref: '/',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+
+    expect(checks.some((report) => report.name === 'managed-asset-internal-path' && report.status === 'fail')).toBe(
+      true,
+    );
+  });
+
+  it('maps publish blockers from canonical release diagnostics without synthetic gate duplicates', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const blockers = result.pipeline.publishContract.publishBlockers;
+    const warnings = result.pipeline.publishContract.publishWarnings;
+
+    expect(blockers.length).toBeGreaterThan(0);
+    expect(blockers.some((value) => value.startsWith('release:site-url:'))).toBe(true);
+    expect(blockers.some((value) => value.includes('release-gate'))).toBe(false);
+    expect(warnings.every((value) => value.startsWith('release:'))).toBe(true);
+  });
+
   it('builds absolute canonical URLs from project siteUrl', () => {
     const state = loadPublisherState(createPublisherFiles());
     const canonical = buildCanonicalUrl(state.pages[0], state.project?.siteUrl);
