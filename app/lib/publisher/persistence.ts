@@ -55,7 +55,7 @@ function normalizePublisherPipeline(build: PublisherBuildSummary) {
             }
           : undefined),
       rollback: {
-        strategy: 'rebuild',
+        strategy: 'rebuild' as const,
         keepLastBuilds: rollback.keepLastBuilds ?? PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS,
         sourceOfTruth: rollback.sourceOfTruth ?? ['project', 'theme', 'pages', 'references', 'checks'],
         requiredArtifacts: rollback.requiredArtifacts ?? (publishContractPath ? [publishContractPath] : []),
