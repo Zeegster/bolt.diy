@@ -58,9 +58,7 @@ function derivePipelineStages(build?: PublisherBuildSummary): PublisherPipelineS
   const pipelineStages = build?.pipeline?.stages;
 
   if (pipelineStages && pipelineStages.length > 0) {
-    return [...pipelineStages].sort(
-      (left, right) => stageOrder.indexOf(left.stage) - stageOrder.indexOf(right.stage),
-    );
+    return [...pipelineStages].sort((left, right) => stageOrder.indexOf(left.stage) - stageOrder.indexOf(right.stage));
   }
 
   const legacyJobs = build?.pipeline?.jobs ?? [];
@@ -231,7 +229,10 @@ export function PublisherReleaseWorkspace({
   ].filter((panel) => panel.checks.length > 0);
   const pipelineStages = derivePipelineStages(latestBuild);
   const workflowStage =
-    workflow.releaseFailureStage ?? workflow.releaseStage ?? latestBuild?.pipeline?.failedStage ?? latestBuild?.pipeline?.activeStage;
+    workflow.releaseFailureStage ??
+    workflow.releaseStage ??
+    latestBuild?.pipeline?.failedStage ??
+    latestBuild?.pipeline?.activeStage;
   const workflowStageResult = workflowStage ? pipelineStages.find((stage) => stage.stage === workflowStage) : undefined;
   const publishContract = latestBuild?.pipeline?.publishContract;
   const publishContractPath = latestBuild?.publishContractPath ?? publishContract?.artifactPath;
@@ -462,10 +463,7 @@ export function PublisherReleaseWorkspace({
 
                   <div className="space-y-2">
                     {groupChecksByKey(group.checks).map((check) => (
-                      <div
-                        key={check.key}
-                        className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}
-                      >
+                      <div key={check.key} className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">{check.name}</span>
                           <span className="uppercase tracking-[0.16em]">{check.status}</span>

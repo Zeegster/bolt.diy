@@ -78,15 +78,14 @@ export function parseRobotsSitemapUrl(robotsTxt: string) {
   }
 
   const value = line.slice(line.indexOf(':') + 1).trim();
+
   return value.length > 0 ? value : undefined;
 }
 
 export function extractSitemapLocations(sitemapXml: string) {
   const matches = sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g);
 
-  return [...matches]
-    .map((match) => match[1]?.trim())
-    .filter((value): value is string => Boolean(value));
+  return [...matches].map((match) => match[1]?.trim()).filter((value): value is string => Boolean(value));
 }
 
 export function buildPageHeadMetadata(

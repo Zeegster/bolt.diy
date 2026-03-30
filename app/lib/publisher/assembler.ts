@@ -621,7 +621,9 @@ export function assemblePublisherProject(
             status: 'completed',
             summary: 'All working and release checks passed.',
             details:
-              checkWarnDetails.length > 0 ? checkWarnDetails : ['No warnings were emitted during working/release checks.'],
+              checkWarnDetails.length > 0
+                ? checkWarnDetails
+                : ['No warnings were emitted during working/release checks.'],
           },
     ),
   );
@@ -649,7 +651,9 @@ export function assemblePublisherProject(
             status: 'completed',
             summary: 'Export artifact metadata emitted to generated/system files.',
             details:
-              checkWarnDetails.length > 0 ? checkWarnDetails : ['Release pipeline completed without additional warnings.'],
+              checkWarnDetails.length > 0
+                ? checkWarnDetails
+                : ['Release pipeline completed without additional warnings.'],
           },
     ),
   );

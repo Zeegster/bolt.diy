@@ -8,7 +8,12 @@ export type PublisherCheckStatus = 'pass' | 'warn' | 'fail';
 export type PublisherAgentMode = 'publisher' | 'editor' | 'general';
 export const publisherReleaseDeliveryStages = ['publish', 'export'] as const;
 export type PublisherReleaseDeliveryStage = (typeof publisherReleaseDeliveryStages)[number];
-export const publisherReleasePipelineStages = ['assemble', 'optimize', 'check', ...publisherReleaseDeliveryStages] as const;
+export const publisherReleasePipelineStages = [
+  'assemble',
+  'optimize',
+  'check',
+  ...publisherReleaseDeliveryStages,
+] as const;
 export type PublisherReleasePipelineStage = (typeof publisherReleasePipelineStages)[number];
 export type PublisherPipelineStageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export type PublisherJobStage = 'intake' | 'contract' | PublisherReleasePipelineStage;
@@ -509,6 +514,7 @@ export interface PublisherPipelineResult {
   stageOrder: PublisherReleasePipelineStage[];
   deliveryStage: PublisherReleaseDeliveryStage;
   stages: PublisherPipelineStageResult[];
+
   // Compatibility bridge for existing Publisher Mode entry points.
   jobs: PublisherJob[];
   activeStage: PublisherReleasePipelineStage;
