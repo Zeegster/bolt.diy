@@ -57,6 +57,15 @@ function createWarning(code: string, message: string, details: string[] = []): I
   };
 }
 
+function createFailWarning(code: string, message: string, details: string[] = []): IntakeWarning {
+  return {
+    code,
+    message,
+    severity: 'fail',
+    details,
+  };
+}
+
 function readMetaContent(document: Document, selector: string) {
   const element = document.querySelector(selector);
   const content = element?.getAttribute('content') ?? '';
@@ -90,6 +99,61 @@ function selectContentRoot(document: Document) {
   }
 
   return (document.body ?? document.documentElement) as HTMLElement;
+}
+
+function collectUnsafeHtmlWarnings(document: Document): IntakeWarning[] {
+  const warnings: IntakeWarning[] = [];
+  const scripts = Array.from(document.querySelectorAll('script'));
+
+  if (scripts.length > 0) {
+    warnings.push(
+      createFailWarning(
+        'unsafe-inline-script',
+        'Imported HTML contains inline script elements.',
+        scripts.slice(0, 3).map((script) => script.outerHTML.slice(0, 120)),
+      ),
+    );
+  }
+
+  const eventHandlers: string[] = [];
+
+  for (const element of Array.from(document.querySelectorAll('*'))) {
+    for (const attribute of Array.from(element.attributes)) {
+      if (attribute.name.toLowerCase().startsWith('on')) {
+        eventHandlers.push(`${element.tagName.toLowerCase()}[${attribute.name}]`);
+      }
+    }
+  }
+
+  if (eventHandlers.length > 0) {
+    warnings.push(
+      createFailWarning(
+        'unsafe-event-handler',
+        'Imported HTML contains inline event handler attributes.',
+        eventHandlers.slice(0, 5),
+      ),
+    );
+  }
+
+  const unsafeLinks: string[] = [];
+
+  for (const element of Array.from(document.querySelectorAll('[href], [src], [action], [formaction]'))) {
+    for (const attributeName of ['href', 'src', 'action', 'formaction'] as const) {
+      const value = collapseWhitespace(element.getAttribute(attributeName) ?? '');
+
+      if (value.toLowerCase().startsWith('javascript:')) {
+        unsafeLinks.push(`${element.tagName.toLowerCase()}[${attributeName}]="${value}"`);
+      }
+    }
+  }
+
+  if (unsafeLinks.length > 0) {
+    warnings.push(
+      createFailWarning('unsafe-url-protocol', 'Imported HTML contains javascript: URLs.', unsafeLinks.slice(0, 5)),
+    );
+  }
+
+  return warnings;
 }
 
 function firstTextFromSelector(document: Document, selector: string) {
@@ -287,7 +351,7 @@ function normalizePageDraft(partial: {
 export function extractHtmlPageDraftFromDocument(document: Document, source: IntakeSourceSnapshot): IntakePageDraft {
   const rawSource = source.html ?? source.text ?? '';
   const preview = buildRawSourcePreview(rawSource);
-  const warnings: IntakeWarning[] = [];
+  const warnings: IntakeWarning[] = collectUnsafeHtmlWarnings(document);
   const root = selectContentRoot(document);
   const h1Text = collapseWhitespace(root.querySelector('h1')?.textContent ?? firstTextFromSelector(document, 'h1'));
   const metaTitle = readTitle(document);

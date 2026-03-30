@@ -353,6 +353,77 @@ First paragraph.
     expect(buildIntakePageChecks(documentDraft).some((check) => check.status === 'fail')).toBe(false);
   });
 
+  it('rejects unsafe imported html', () => {
+    const unsafeDraft = extractHtmlPageDraftFromDocument(
+      createHtmlDocument(
+        `<!doctype html>
+<html lang="en">
+  <head>
+    <title>Unsafe Page</title>
+    <meta name="description" content="Unsafe import">
+  </head>
+  <body>
+    <main>
+      <h1>Unsafe Page</h1>
+      <a href="javascript:alert('x')">Bad link</a>
+      <button onclick="evil()">Click</button>
+      <script>alert('x')</script>
+    </main>
+  </body>
+</html>`,
+      ),
+      htmlSource('pages/unsafe.html', ''),
+    );
+
+    const checks = buildIntakePageChecks(unsafeDraft);
+
+    expect(checks.filter((check) => check.status === 'fail').map((check) => check.id)).toEqual(
+      expect.arrayContaining(['unsafe-imported-html']),
+    );
+    expect(unsafeDraft.warnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining(['unsafe-inline-script', 'unsafe-event-handler', 'unsafe-url-protocol']),
+    );
+  });
+
+  it('preserves markdown heading integrity', () => {
+    const draft = extractDocumentPageDraft(
+      markdownSource(
+        'content-source/heading-integrity.md',
+        `---
+title: Heading Integrity
+description: Deterministic heading structure
+h1: Heading Integrity
+robots: noindex
+canonical: https://example.com/ignored
+---
+
+# Heading Integrity
+
+## Details
+
+Body copy.
+
+#### Skipped Level
+
+More copy.
+
+## Details
+
+Repeated heading.`,
+      ),
+    );
+
+    const checks = buildIntakePageChecks(draft);
+
+    expect(draft.title).toBe('Heading Integrity');
+    expect(draft.description).toBe('Deterministic heading structure');
+    expect(checks.map((check) => check.id)).toEqual(
+      expect.arrayContaining(['duplicate-headings', 'heading-increment']),
+    );
+    expect(draft.seo?.robots).toBe('index,follow');
+    expect(draft.seo?.canonicalPath).toBe('/heading-integrity/');
+  });
+
   it('round-trips intake sessions and script runs in local storage', () => {
     const localStorage = createMemoryStorage();
     const globalWithWindow = globalThis as any;
@@ -556,6 +627,28 @@ First paragraph.
     expect(() =>
       parseIntakeBatchNormalizeOutput(
         '{"pages":[{"slug":"bonus","title":"Bonus Page","description":"Secondary reference doc","heading":"Bonus Heading"}]}',
+      ),
+    ).toThrow();
+  });
+
+  it('parses batch normalize payload', () => {
+    expect(() =>
+      parseIntakeBatchNormalizeOutput(
+        JSON.stringify({
+          pages: [
+            {
+              slug: 'bonus',
+              title: 'Bonus Page',
+              description: 'Secondary reference doc',
+              heading: 'Bonus Heading',
+              source: '# Bonus Heading',
+              extra: 'nope',
+            },
+          ],
+          meta: {
+            widened: true,
+          },
+        }),
       ),
     ).toThrow();
   });

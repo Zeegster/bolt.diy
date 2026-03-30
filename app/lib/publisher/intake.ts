@@ -27,7 +27,7 @@ import {
 } from './intake-path';
 import { extractDocumentPageDraft } from './intake-document';
 import { extractHtmlPageDraftFromSource } from './intake-html';
-import { buildHeadingChecks } from './intake-checks';
+import { buildHeadingChecks, buildUnsafeImportChecks } from './intake-checks';
 
 export { extractDocumentPageDraft, parseDocumentSource } from './intake-document';
 export {
@@ -579,6 +579,9 @@ export function buildIntakePageChecks(page: IntakePageDraft): IntakeCheck[] {
     );
   }
 
+  checks.push(...buildUnsafeImportChecks(page));
+  checks.push(...buildHeadingChecks(page));
+
   return checks;
 }
 
@@ -623,7 +626,9 @@ export function buildIntakeSessionChecks(session: IntakeSession): IntakeCheck[] 
     );
     const rawSource = matchingSource?.text ?? matchingSource?.html;
 
-    checks.push(...buildHeadingChecks(page, rawSource));
+    if (rawSource?.trim()) {
+      checks.push(...buildHeadingChecks(page, rawSource));
+    }
   }
 
   return checks;

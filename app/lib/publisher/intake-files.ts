@@ -260,19 +260,23 @@ const intakeSessionCoreSchema = z
   })
   .passthrough();
 
-export const intakeAiBatchPageResultSchema = z.object({
-  slug: z.string().trim().min(1),
-  title: z.string().nullable(),
-  description: z.string().nullable(),
-  heading: z.string().nullable(),
-  source: z.string().trim().min(1),
-  unresolved: z.array(z.string()).optional(),
-  notes: z.array(z.string()).optional(),
-});
+export const intakeAiBatchPageResultSchema = z
+  .object({
+    slug: z.string().trim().min(1),
+    title: z.string().nullable(),
+    description: z.string().nullable(),
+    heading: z.string().nullable(),
+    source: z.string().trim().min(1),
+    unresolved: z.array(z.string()).optional(),
+    notes: z.array(z.string()).optional(),
+  })
+  .strict();
 
-export const intakeAiBatchResultSchema = z.object({
-  pages: z.array(intakeAiBatchPageResultSchema),
-});
+export const intakeAiBatchResultSchema = z
+  .object({
+    pages: z.array(intakeAiBatchPageResultSchema),
+  })
+  .strict();
 
 function parseJson<T>(content?: string): T | undefined {
   if (!content) {

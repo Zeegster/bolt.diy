@@ -117,3 +117,23 @@ export function buildHeadingChecks(page: IntakePageDraft, rawSource?: string): I
 
   return checks;
 }
+
+const unsafeWarningCodes = new Set(['unsafe-inline-script', 'unsafe-event-handler', 'unsafe-url-protocol']);
+
+export function buildUnsafeImportChecks(page: IntakePageDraft): IntakeCheck[] {
+  const unsafeWarnings = page.warnings.filter((warning) => unsafeWarningCodes.has(warning.code));
+
+  if (unsafeWarnings.length === 0) {
+    return [];
+  }
+
+  return [
+    createCheck(
+      'unsafe-imported-html',
+      `Page ${page.id} contains unsafe imported HTML that must be repaired before contract generation.`,
+      'fail',
+      page,
+      unsafeWarnings.map((warning) => warning.message),
+    ),
+  ];
+}
