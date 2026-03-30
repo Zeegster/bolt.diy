@@ -11,6 +11,7 @@ import type {
   PublisherProjectStatus,
   PublisherWorkflowState,
   ZoneType,
+  PublisherAgentActionContract,
 } from '~/types/publisher';
 import { publisherBlockRegistry } from '~/lib/publisher/block-registry';
 import { describePublisherSlotEditing } from '~/lib/publisher/contracts';
@@ -60,6 +61,7 @@ interface PublisherIntakeWorkspaceProps {
   onOpenManifest?: () => void;
   onOpenSitemap?: () => void;
   onOpenRobots?: () => void;
+  onQueueRepairIntent?: (payload: { intent: PublisherAgentActionContract; check: CheckReport }) => void;
   busySettings?: boolean;
 }
 
@@ -130,6 +132,7 @@ export function PublisherIntakeWorkspace({
   onOpenManifest,
   onOpenSitemap,
   onOpenRobots,
+  onQueueRepairIntent,
   busySettings,
 }: PublisherIntakeWorkspaceProps) {
   const [drafts, setDrafts] = useState<Record<string, IntakePageDraft>>(() =>
@@ -389,6 +392,7 @@ export function PublisherIntakeWorkspace({
               onOpenManifest={onOpenManifest}
               onOpenSitemap={onOpenSitemap}
               onOpenRobots={onOpenRobots}
+              onQueueRepairIntent={onQueueRepairIntent}
             />
           </div>
 

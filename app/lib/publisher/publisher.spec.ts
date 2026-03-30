@@ -9,6 +9,7 @@ import { derivePublisherWorkflowState } from './status';
 import { buildIntakePageChecks } from './intake';
 import { buildPublisherContractsFromIntakeSession } from './intake-pipeline';
 import { buildImportedBundleAdapter } from './intake-adapter';
+import { buildPromptForRepairIntent, deriveRepairIntentFromCheck } from './agent-model';
 import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
@@ -837,6 +838,35 @@ describe('publisher workflow', () => {
     expect(repairPrompt).toContain('repairCheck: metadata-completeness');
     expect(previewPrompt).toContain('intent: repair');
     expect(previewPrompt).toContain('targetFileScope: generated-rebuild-only');
+  });
+
+  it('builds bounded repair prompt copy from release diagnostics', () => {
+    const intent = deriveRepairIntentFromCheck({
+      name: 'missing-zone',
+      status: 'fail',
+      message: 'Page contract is missing a required zone.',
+      pageId: 'home',
+      zone: 'content',
+      gate: 'working',
+    });
+    const prompt = buildPromptForRepairIntent(intent, {
+      name: 'missing-zone',
+      status: 'fail',
+      message: 'Page contract is missing a required zone.',
+      pageId: 'home',
+      zone: 'content',
+      gate: 'working',
+    });
+
+    expect(intent).toEqual({
+      action: 'fill',
+      pageId: 'home',
+      zone: 'content',
+      slotId: 'missing-zone',
+    });
+    expect(prompt).toContain('intent: repair');
+    expect(prompt).toContain('intentScope: fill missing contract fields for page "home" zone "content" only.');
+    expect(prompt).toContain('intentBoundaries: keep the repair inside the existing slot and zone contract surface.');
   });
 
   it('derives intake review workflow state from unapplied intake sessions', () => {

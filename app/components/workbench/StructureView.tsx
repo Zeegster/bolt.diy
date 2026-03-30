@@ -33,6 +33,7 @@ import { loadIntakeSession } from '~/lib/publisher/intake-files';
 import { buildIntakePageChecks, buildIntakeSessionChecks } from '~/lib/publisher/intake';
 import { normalizeIntakePageWithProvider, normalizeIntakePagesWithProvider } from '~/lib/publisher/intake-ai';
 import { buildImportedBundleAdapter } from '~/lib/publisher/intake-adapter';
+import { buildPromptForRepairIntent } from '~/lib/publisher/agent-model';
 import {
   buildIntakeAiBatchPageInput,
   buildPublisherContractsFromIntakeSession,
@@ -52,11 +53,13 @@ import { usePreviewStore } from '~/lib/stores/previews';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type {
   AssetRef,
+  CheckReport,
   IntakeImportKind,
   IntakePageDraft,
   IntakeProjectDraft,
   IntakeSession,
   PageContract,
+  PublisherAgentActionContract,
   PublisherReferenceState,
   PublisherSiteSettings,
   PublisherBuildSummary,
@@ -363,6 +366,26 @@ export function StructureView() {
       message: prompt,
       replaceRequested: true,
       source: context?.blockId ? 'slot' : context?.zone ? 'page' : 'rebuild',
+    });
+  };
+
+  const handleQueueRepairIntent = ({ intent, check }: { intent: PublisherAgentActionContract; check: CheckReport }) => {
+    const intentZone = 'zone' in intent ? intent.zone : undefined;
+    const targetScope = [intent.pageId, intentZone, 'slotId' in intent ? intent.slotId : undefined]
+      .filter(Boolean)
+      .join(' / ');
+    const applyRepair = window.confirm(
+      `Queue a ${intent.action} repair prompt for "${check.name}"${targetScope ? ` targeting ${targetScope}` : ''}?`,
+    );
+
+    if (!applyRepair) {
+      return;
+    }
+
+    prefillPrompt(buildPromptForRepairIntent(intent, check), {
+      pageId: intent.pageId,
+      zone: intentZone,
+      blockId: 'slotId' in intent ? intent.slotId : undefined,
     });
   };
 
@@ -977,6 +1000,7 @@ export function StructureView() {
       onOpenManifest={() => openFile(PUBLISHER_MANIFEST_FILE)}
       onOpenSitemap={() => openFile(PUBLISHER_SITEMAP_FILE)}
       onOpenRobots={() => openFile(PUBLISHER_ROBOTS_FILE)}
+      onQueueRepairIntent={handleQueueRepairIntent}
       onOpenContract={(page: PageContract) => openFile(getPublisherPageFilePath(page.slug))}
       onNormalizeWithAi={(page: PageContract) => {
         prefillPrompt(buildNormalizePrompt(page.id), { pageId: page.id });

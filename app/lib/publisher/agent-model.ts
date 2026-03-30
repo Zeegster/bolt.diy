@@ -85,20 +85,26 @@ export function buildPromptForRepairIntent(intent: PublisherAgentActionContract,
       return [
         buildRepairRegeneratePrompt(check.name, intent.pageId),
         `intentScope: normalize metadata for page "${intent.pageId}" only.`,
+        'intentBoundaries: return only metadata field repairs required by the named check.',
       ].join('\n');
     case 'map':
       return [
         buildRepairRegeneratePrompt(check.name, intent.pageId),
         `intentScope: map source "${intent.sourcePath}" into page "${intent.pageId}" only.`,
+        'intentBoundaries: preserve unrelated pages, shell, and theme contracts.',
       ].join('\n');
     case 'fill':
       return [
         buildRepairRegeneratePrompt(check.name, intent.pageId, intent.zone),
         `intentScope: fill missing contract fields for page "${intent.pageId}" zone "${intent.zone}" only.`,
         `intentSlot: ${intent.slotId}`,
+        'intentBoundaries: keep the repair inside the existing slot and zone contract surface.',
       ].join('\n');
     case 'repair':
-      return buildRepairRegeneratePrompt(intent.checkName, intent.pageId, intent.zone);
+      return [
+        buildRepairRegeneratePrompt(intent.checkName, intent.pageId, intent.zone),
+        'intentBoundaries: resolve only the named diagnostic without widening publisher output scope.',
+      ].join('\n');
   }
 
   return buildRepairRegeneratePrompt(check.name, check.pageId, check.zone);

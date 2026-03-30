@@ -77,6 +77,35 @@ describe('publisher agent model', () => {
         pageId: 'home',
         gate: 'release',
       }),
-    ).toContain('intent: repair');
+    ).toContain('intentBoundaries: resolve only the named diagnostic without widening publisher output scope.');
+  });
+
+  it('falls back to bounded repair intents when scoped metadata or composition targets are missing', () => {
+    const metadataWithoutPage = deriveRepairIntentFromCheck({
+      name: 'metadata-completeness',
+      status: 'fail',
+      message: 'Project metadata is incomplete.',
+      gate: 'release',
+    });
+    const compositionWithoutZone = deriveRepairIntentFromCheck({
+      name: 'missing-zone',
+      status: 'fail',
+      message: 'Page contract is missing a required zone.',
+      pageId: 'home',
+      gate: 'working',
+    });
+
+    expect(metadataWithoutPage).toEqual({
+      action: 'repair',
+      checkName: 'metadata-completeness',
+      pageId: undefined,
+      zone: undefined,
+    });
+    expect(compositionWithoutZone).toEqual({
+      action: 'repair',
+      checkName: 'missing-zone',
+      pageId: 'home',
+      zone: undefined,
+    });
   });
 });

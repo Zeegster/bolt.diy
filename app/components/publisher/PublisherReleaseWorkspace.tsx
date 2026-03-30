@@ -1,12 +1,14 @@
 import {
   publisherReleasePipelineStages,
   type CheckReport,
+  type PublisherAgentActionContract,
   type PublisherBuildSummary,
   type PublisherPipelineStageResult,
   type PublisherProjectStatus,
   type PublisherReleasePipelineStage,
   type PublisherWorkflowState,
 } from '~/types/publisher';
+import { deriveRepairIntentFromCheck } from '~/lib/publisher/agent-model';
 import { categorizePublisherDiagnostic, getPublisherDiagnosticLabel } from '~/lib/publisher/intake-ui';
 
 const statusOrder: PublisherProjectStatus[] = [
@@ -96,6 +98,7 @@ function getTargetSummary(check: CheckReport) {
 
 interface GroupedCheckItem {
   key: string;
+  sampleCheck: CheckReport;
   name: string;
   status: CheckReport['status'];
   message: string;
@@ -131,6 +134,7 @@ function groupChecksByKey(checks: CheckReport[]): GroupedCheckItem[] {
 
     grouped.set(key, {
       key,
+      sampleCheck: check,
       name: check.name,
       status: check.status,
       message: check.message,
@@ -176,6 +180,7 @@ interface PublisherReleaseWorkspaceProps {
   onOpenManifest?: () => void;
   onOpenSitemap?: () => void;
   onOpenRobots?: () => void;
+  onQueueRepairIntent?: (payload: { intent: PublisherAgentActionContract; check: CheckReport }) => void;
 }
 
 export function PublisherReleaseWorkspace({
@@ -189,6 +194,7 @@ export function PublisherReleaseWorkspace({
   onOpenManifest,
   onOpenSitemap,
   onOpenRobots,
+  onQueueRepairIntent,
 }: PublisherReleaseWorkspaceProps) {
   const latestBuild = buildHistory[0];
   const releaseChecks = checks.filter((check) => check.gate === 'release');
@@ -438,6 +444,10 @@ export function PublisherReleaseWorkspace({
         </div>
       </div>
 
+      <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+        Repair actions require operator confirmation before prompt prefill.
+      </div>
+
       {groupedPanels.length > 0 ? (
         <div className="mt-4 space-y-4">
           {groupedPanels.map((panel) => (
@@ -462,26 +472,39 @@ export function PublisherReleaseWorkspace({
                   </div>
 
                   <div className="space-y-2">
-                    {groupChecksByKey(group.checks).map((check) => (
-                      <div key={check.key} className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{check.name}</span>
-                          <span className="uppercase tracking-[0.16em]">{check.status}</span>
-                        </div>
-                        <div className="mt-1 opacity-90">{check.message}</div>
-                        <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
-                          Inspect ({check.count}): {check.targets.join(' · ')}
-                        </div>
-                        {check.details.length ? (
-                          <div className="mt-2 opacity-90">{check.details.slice(0, 4).join(' · ')}</div>
-                        ) : null}
-                        {check.details.length > 4 ? (
-                          <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
-                            +{check.details.length - 4} more detail item(s)
+                    {groupChecksByKey(group.checks).map((check) => {
+                      const repairIntent = deriveRepairIntentFromCheck(check.sampleCheck);
+
+                      return (
+                        <div key={check.key} className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{check.name}</span>
+                            <span className="uppercase tracking-[0.16em]">{check.status}</span>
                           </div>
-                        ) : null}
-                      </div>
-                    ))}
+                          <div className="mt-1 opacity-90">{check.message}</div>
+                          <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
+                            Inspect ({check.count}): {check.targets.join(' · ')}
+                          </div>
+                          {check.details.length ? (
+                            <div className="mt-2 opacity-90">{check.details.slice(0, 4).join(' · ')}</div>
+                          ) : null}
+                          {check.details.length > 4 ? (
+                            <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
+                              +{check.details.length - 4} more detail item(s)
+                            </div>
+                          ) : null}
+                          {onQueueRepairIntent ? (
+                            <button
+                              type="button"
+                              onClick={() => onQueueRepairIntent({ intent: repairIntent, check: check.sampleCheck })}
+                              className="mt-3 rounded-lg border border-current/20 bg-black/10 px-3 py-2 text-xs font-medium hover:bg-black/20"
+                            >
+                              Queue {repairIntent.action} prompt
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
