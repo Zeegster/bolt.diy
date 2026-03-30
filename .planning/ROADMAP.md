@@ -88,9 +88,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Audit and tighten prompt context plus reserved publisher file boundaries.
-- [ ] 05-02: Document and implement agent action contracts for normalize/map/fill/repair.
-- [ ] 05-03: Connect gate diagnostics to repair workflows and operator confirmation steps.
+- [ ] 05-01-PLAN.md — Tighten prompt ownership boundaries and reserved publisher file scope.
+- [ ] 05-02-PLAN.md — Add typed `normalize|map|fill|repair` action contract and runtime publisher write guard.
+- [ ] 05-03-PLAN.md — Wire release diagnostics to confirmation-gated repair prompts.
 
 ### Phase 6: Batch Readiness
 **Goal**: After the single-operator pipeline is stable, the system gains queue, metrics, and orchestration seams needed for `10-20` sites/day.
