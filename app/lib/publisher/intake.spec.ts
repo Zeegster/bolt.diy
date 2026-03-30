@@ -26,6 +26,7 @@ import {
   loadIntakeSession as loadStoredIntakeSession,
   saveIntakeSession,
 } from './intake-session';
+import { buildImportedBundleAdapter } from './intake-adapter';
 
 function createHtmlDocument(html: string) {
   return new JSDOM(html).window.document;
@@ -659,6 +660,103 @@ Repeated heading.`,
     const resolved = resolveUniqueImportedSourcePath(basePath, existing);
 
     expect(resolved).toContain('__dup-3.md');
+  });
+
+  it('builds deterministic intake session from imported bundle', () => {
+    const result = buildImportedBundleAdapter({
+      sessionId: 'imported-html-bundle',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        domain: 'spinaura.example',
+        defaultLanguage: 'fr',
+        multilingual: true,
+        languages: ['fr', 'en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+      now: '2026-03-30T12:00:00.000Z',
+    });
+
+    expect(result.scan.scenario).toBe('template-plus-documents');
+    expect(result.session.id).toBe('imported-html-bundle');
+    expect(result.session.status).toBe('reviewing');
+    expect(result.session.templateCandidatePath).toBe('index.html');
+    expect(result.session.homePageCandidatePath).toBe('pages/index.html');
+    expect(result.session.referenceSourceFamily).toBe('document');
+    expect(result.session.documentSourcePaths).toEqual(
+      expect.arrayContaining(['content-source/index.md', 'content-source/bonus.md']),
+    );
+    expect(result.reservedFiles['/home/project/.bolt/publisher/intake/session.json']).toBeDefined();
+    expect(result.reservedFiles['/home/project/.bolt/publisher/intake/sources/manifest.json']).toBeDefined();
+  });
+
+  it('normalizes imported bundle references', () => {
+    const result = buildImportedBundleAdapter({
+      sessionId: 'imported-html-references',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        defaultLanguage: 'fr',
+        multilingual: true,
+        languages: ['fr', 'en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+    const sourceManifest = result.session.sourceManifest;
+    expect(sourceManifest).toBeDefined();
+
+    const page = result.session.pages.find((entry) => entry.sourcePath === 'pages/privacy.html');
+    const manifestEntry = sourceManifest?.sources.find((source) => source.path === 'assets/css/main.css');
+
+    expect(page?.storedSourcePath).toBe('/home/project/.bolt/publisher/intake/sources/imported/pages/privacy.html');
+    expect(result.session.assetSourcePaths).toEqual(
+      expect.arrayContaining(['assets/css/main.css', 'assets/js/script.js']),
+    );
+    expect(manifestEntry?.storedPath).toBe('/home/project/.bolt/publisher/intake/sources/imported/assets/css/main.css');
+    expect(manifestEntry?.sourceFamilyHint).toBe('asset');
+  });
+
+  it('round-trips imported bundle intake sessions', () => {
+    const result = buildImportedBundleAdapter({
+      sessionId: 'imported-html-roundtrip',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        domain: 'spinaura.example',
+        defaultLanguage: 'fr',
+        multilingual: true,
+        languages: ['fr', 'en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+      now: '2026-03-30T12:00:00.000Z',
+    });
+    const files = Object.fromEntries(
+      Object.entries(result.reservedFiles).map(([path, content]) => [path, { type: 'file', content }]),
+    ) as any;
+    const globalWithWindow = globalThis as any;
+
+    globalWithWindow.window = { localStorage: createMemoryStorage() };
+    saveIntakeSession(result.session);
+
+    const loadedFromFiles = loadIntakeSessionFromFiles(files);
+    const loadedFromStorage = loadStoredIntakeSession(result.session.id);
+    const sourceManifest = result.session.sourceManifest;
+    expect(sourceManifest).toBeDefined();
+
+    expect(loadedFromFiles?.pages.map((page) => page.sourcePath)).toEqual(
+      result.session.pages.map((page) => page.sourcePath),
+    );
+    expect(loadedFromFiles?.sources[0]?.storedPath).toBe(result.session.sources[0]?.storedPath);
+    expect(loadedFromStorage?.sourceManifest?.sources.map((source) => source.storedPath)).toEqual(
+      sourceManifest?.sources.map((source) => source.storedPath),
+    );
+    expect(loadedFromStorage?.scriptRuns).toEqual(result.session.scriptRuns);
   });
 
   it('preserves raw markdown source across intake artifact roundtrip', () => {

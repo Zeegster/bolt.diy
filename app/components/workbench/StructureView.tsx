@@ -30,13 +30,9 @@ import {
   readImageDimensions,
 } from '~/lib/publisher/file-helpers';
 import { loadIntakeSession } from '~/lib/publisher/intake-files';
-import {
-  buildIntakePageChecks,
-  buildIntakeSessionChecks,
-  detectIntakeScenario,
-  scanIntakeSourceTree,
-} from '~/lib/publisher/intake';
+import { buildIntakePageChecks, buildIntakeSessionChecks } from '~/lib/publisher/intake';
 import { normalizeIntakePageWithProvider, normalizeIntakePagesWithProvider } from '~/lib/publisher/intake-ai';
+import { buildImportedBundleAdapter } from '~/lib/publisher/intake-adapter';
 import {
   buildIntakeAiBatchPageInput,
   buildPublisherContractsFromIntakeSession,
@@ -56,7 +52,6 @@ import { usePreviewStore } from '~/lib/stores/previews';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type {
   AssetRef,
-  IntakeScenario,
   IntakeImportKind,
   IntakePageDraft,
   IntakeProjectDraft,
@@ -702,11 +697,23 @@ export function StructureView() {
       return;
     }
 
-    const scan = scanIntakeSourceTree(intakeDraft.sources, {
-      rootPath: intakeDraft.sourceRoot,
+    const result = buildImportedBundleAdapter({
+      sessionId: intakeDraft.id,
+      sourceLabel: intakeDraft.sourceLabel,
+      sourceRoot: intakeDraft.sourceRoot,
       importKind: selection.importKind,
+      sources: intakeDraft.sources,
+      project: intakeDraft.project,
+      templateCandidatePath: selection.templateCandidatePath,
+      homePageCandidatePath: selection.homePageCandidatePath,
     });
-    const scenario = scan.scenarioResult ?? detectIntakeScenario(scan, selection.importKind);
+    const scenario = result.session.scenarioResult ?? result.scan.scenarioResult;
+
+    if (!scenario) {
+      toast.error('Unable to resolve intake scenario for the selected import family.');
+      return;
+    }
+
     const templateCandidates = scenario.templateCandidatePaths ?? [];
     const homeCandidates = scenario.homeCandidatePaths ?? [];
     const selectedTemplateCandidatePath =
@@ -743,78 +750,10 @@ export function StructureView() {
       return;
     }
 
-    const resolvedTemplateCandidatePath = selectedTemplateCandidatePath || undefined;
-    const resolvedHomePageCandidatePath = selectedHomeCandidatePath || undefined;
-    const htmlHasCompanionPages = scan.htmlPageDrafts.some(
-      (draft) => draft.sourcePath !== resolvedTemplateCandidatePath && draft.role !== 'backup',
-    );
-    const resolvedPages =
-      selection.importKind === 'html'
-        ? scan.htmlPageDrafts.filter(
-            (draft) =>
-              draft.role !== 'backup' &&
-              (htmlHasCompanionPages ? draft.sourcePath !== resolvedTemplateCandidatePath : true),
-          )
-        : scan.documentPageDrafts.filter((draft) => draft.role !== 'backup');
-    const resolvedReferences =
-      selection.importKind === 'html'
-        ? scan.documentPageDrafts.filter((draft) => draft.role !== 'backup')
-        : scan.htmlPageDrafts.filter(
-            (draft) => draft.role !== 'backup' && draft.sourcePath !== resolvedTemplateCandidatePath,
-          );
-    const resolvedScenario = {
-      ...scenario,
-      scenario: (selection.importKind === 'html'
-        ? scan.documentPageDrafts.length > 0
-          ? 'template-plus-documents'
-          : 'html-import'
-        : 'document-import') as IntakeScenario,
-      needsUserChoice: false,
-      templateCandidatePath: resolvedTemplateCandidatePath,
-      homePageCandidatePath: resolvedHomePageCandidatePath,
-    };
-
-    const storedPathBySourcePath = new Map(intakeDraft.sources.map((source) => [source.path, source.storedPath]));
-    const nextPages = resolvedPages.map((page) => ({
-      ...page,
-      storedSourcePath: page.storedSourcePath ?? storedPathBySourcePath.get(page.sourcePath),
-    }));
     const nextSession: IntakeSession = {
-      ...intakeDraft,
-      importKind: selection.importKind,
-      scenario: resolvedScenario.scenario,
-      activeContentFamily: selection.importKind,
-      referenceSourceFamily:
-        selection.importKind === 'html' ? 'document' : scan.htmlPageDrafts.length > 0 ? 'html' : undefined,
-      templateCandidatePath: resolvedTemplateCandidatePath,
-      homePageCandidatePath: resolvedHomePageCandidatePath,
-      scenarioResult: {
-        ...resolvedScenario,
-        activeContentFamily: selection.importKind,
-      },
-      disambiguation: {
-        ...(intakeDraft.disambiguation ?? {
-          status: 'pending',
-          candidateImportKinds: ['html', 'document'],
-          templateCandidatePaths: scenario.templateCandidatePaths ?? [],
-          homeCandidatePaths: scenario.homeCandidatePaths ?? [],
-        }),
-        status: 'resolved',
-        selectedImportKind: selection.importKind,
-        selectedTemplateCandidatePath: resolvedTemplateCandidatePath,
-        selectedHomePageCandidatePath: resolvedHomePageCandidatePath,
-      },
-      status: 'reviewing',
-      pages: nextPages,
-      currentPageId: nextPages[0]?.id,
-      pageSourcePaths: nextPages.map((page) => page.sourcePath),
-      documentSourcePaths: resolvedReferences
-        .filter((page) => page.sourceFamily === 'document')
-        .map((page) => page.sourcePath),
-      assetSourcePaths: scan.supportedSources
-        .filter((source) => source.sourceFamilyHint === 'asset')
-        .map((source) => source.path),
-      warnings: [...scan.warnings, ...scenario.warnings],
+      ...result.session,
+      createdAt: intakeDraft.createdAt,
+      scriptRuns: intakeDraft.scriptRuns,
       updatedAt: new Date().toISOString(),
     };
     nextSession.checks = buildIntakeSessionChecks(nextSession);
