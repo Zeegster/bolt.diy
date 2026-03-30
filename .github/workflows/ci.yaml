@@ -23,8 +23,8 @@ jobs:
       - name: Run ESLint
         run: pnpm run lint
 
-      - name: Run publisher release tests
-        run: pnpm run test:publisher:release
+      - name: Run publisher release quality checks
+        run: pnpm run verify:publisher:release-quality
 
       - name: Run tests
         run: pnpm run test

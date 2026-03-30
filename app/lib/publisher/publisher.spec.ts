@@ -242,10 +242,17 @@ describe('publisher workflow', () => {
 
     expect(result.pipeline.stages).toHaveLength(4);
     expect(result.pipeline.stages.every((stage) => Boolean(stage.startedAt) && Boolean(stage.finishedAt))).toBe(true);
-    expect(result.pipeline.stages.map((stage) => stage.status)).toEqual(['completed', 'completed', 'completed', 'completed']);
+    expect(result.pipeline.stages.map((stage) => stage.status)).toEqual([
+      'completed',
+      'completed',
+      'completed',
+      'completed',
+    ]);
     expect(result.pipeline.jobs).toHaveLength(result.pipeline.stages.length);
     expect(result.pipeline.jobs.every((job) => job.id.startsWith(`${result.build.id}:`))).toBe(true);
-    expect(result.pipeline.jobs.map((job) => job.details?.[0])).toEqual(result.pipeline.stages.map((stage) => stage.summary));
+    expect(result.pipeline.jobs.map((job) => job.details?.[0])).toEqual(
+      result.pipeline.stages.map((stage) => stage.summary),
+    );
     expect(result.build.stage).toBe('export');
     expect(result.build.pipeline?.activeStage).toBe('export');
   });
@@ -273,7 +280,9 @@ describe('publisher workflow', () => {
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
     const checkStage = result.pipeline.stages.find((stage) => stage.stage === 'check');
     const exportStage = result.pipeline.stages.find((stage) => stage.stage === 'export');
-    const publishContractArtifact = JSON.parse(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]) as typeof result.pipeline.publishContract;
+    const publishContractArtifact = JSON.parse(
+      result.files[PUBLISHER_PUBLISH_CONTRACT_FILE],
+    ) as typeof result.pipeline.publishContract;
     const provenance = JSON.parse(result.files[PUBLISHER_PROVENANCE_FILE]) as { publishContractPath?: string };
 
     expect(checkStage?.status).toBe('failed');
@@ -281,7 +290,9 @@ describe('publisher workflow', () => {
     expect(exportStage?.status).toBe('failed');
     expect(exportStage?.blockingReason).toContain('check-stage failures');
     expect(exportStage?.details).toEqual(expect.arrayContaining(checkStage?.details ?? []));
-    expect(result.pipeline.publishContract.publishBlockers.some((value) => value.startsWith('release:site-url:'))).toBe(true);
+    expect(result.pipeline.publishContract.publishBlockers.some((value) => value.startsWith('release:site-url:'))).toBe(
+      true,
+    );
     expect(publishContractArtifact.canPublish).toBe(false);
     expect(publishContractArtifact.publishBlockers).toEqual(result.pipeline.publishContract.publishBlockers);
     expect(provenance.publishContractPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
@@ -501,7 +512,9 @@ describe('publisher workflow', () => {
   it('writes publish contract artifact aligned with pipeline metadata and rebuild strategy', () => {
     const state = loadPublisherState(createPublisherFiles());
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
-    const publishContract = JSON.parse(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]) as typeof result.pipeline.publishContract;
+    const publishContract = JSON.parse(
+      result.files[PUBLISHER_PUBLISH_CONTRACT_FILE],
+    ) as typeof result.pipeline.publishContract;
 
     expect(publishContract.buildId).toBe(result.build.id);
     expect(publishContract.artifactPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);

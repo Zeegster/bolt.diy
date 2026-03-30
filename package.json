@@ -17,6 +17,8 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:publisher:release": "vitest app/lib/publisher/publisher.spec.ts app/lib/publisher/ui-state.spec.ts --run",
+    "quality:lighthouse:ci": "node -e \"console.log('Lighthouse CI gate is intentionally deferred for this phase.')\"",
+    "verify:publisher:release-quality": "pnpm run test:publisher:release && pnpm run quality:lighthouse:ci",
     "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint app",
     "lint:fix": "npm run lint -- --fix && prettier app --write",
     "start:windows": "wrangler pages dev ./build/client",
