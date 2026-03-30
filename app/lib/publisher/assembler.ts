@@ -17,14 +17,16 @@ import type {
   CheckReport,
   LoadedPublisherState,
   PageContract,
-  PublisherJobStage,
   PublisherAssemblyResult,
   PublisherAgentContext,
   PublisherBuildArtifact,
+  PublisherPipelineStageResult,
+  PublisherPipelineStageStatus,
   PublisherPipelineResult,
   PublisherPublishContract,
   PublisherBuildProvenance,
   PublisherBuildSummary,
+  PublisherReleaseDeliveryStage,
   PublisherJob,
   SlotContract,
   ZoneContract,
@@ -396,21 +398,38 @@ function buildPublishContract(
   };
 }
 
-function createPublishJob(
-  buildId: string,
-  stage: PublisherJobStage,
-  status: PublisherJob['status'],
-  details: string[],
-): PublisherJob {
+type FinalizedPipelineStageStatus = Exclude<PublisherPipelineStageStatus, 'pending' | 'running'>;
+
+interface PipelineStageExecutionInput {
+  stage: PublisherPipelineStageResult['stage'];
+  status: FinalizedPipelineStageStatus;
+  summary: string;
+  details: string[];
+  blockingReason?: string;
+}
+
+function createPipelineStageResult(input: PipelineStageExecutionInput): PublisherPipelineStageResult {
   const startedAt = new Date().toISOString();
 
   return {
-    id: `${buildId}:${stage}`,
-    stage,
-    status,
+    stage: input.stage,
+    status: input.status,
     startedAt,
     finishedAt: new Date().toISOString(),
-    details,
+    summary: input.summary,
+    details: input.details,
+    blockingReason: input.blockingReason,
+  };
+}
+
+function createPipelineJob(buildId: string, stageResult: PublisherPipelineStageResult): PublisherJob {
+  return {
+    id: `${buildId}:${stageResult.stage}`,
+    stage: stageResult.stage,
+    status: stageResult.status,
+    startedAt: stageResult.startedAt,
+    finishedAt: stageResult.finishedAt,
+    details: [stageResult.summary, ...stageResult.details],
   };
 }
 
@@ -418,53 +437,22 @@ function buildPublisherPipeline(
   build: PublisherBuildSummary,
   checks: CheckReport[],
   state: LoadedPublisherState,
+  stages: PublisherPipelineStageResult[],
+  deliveryStage: PublisherReleaseDeliveryStage,
 ): PublisherPipelineResult {
-  const checkFailCount = checks.filter((report) => report.status === 'fail').length;
-  const checkFailDetails = checks
-    .filter((report) => report.status === 'fail')
-    .map((check) => `${check.name}: ${check.message}`);
-  const checkWarnDetails = checks
-    .filter((report) => report.status === 'warn')
-    .map((check) => `${check.name}: ${check.message}`);
-  const workingFailures = checks.filter((report) => report.gate === 'working' && report.status === 'fail').length;
-  const releaseFailures = checks.filter((report) => report.gate === 'release' && report.status === 'fail').length;
-  const hasBlockers = workingFailures > 0 || releaseFailures > 0;
+  const failedStage = stages.find((stage) => stage.status === 'failed')?.stage;
+  const activeStage = failedStage ?? stages[stages.length - 1]?.stage ?? 'assemble';
 
-  const assembleJob = createPublishJob(build.id, 'assemble', 'completed', [
-    'Contract-driven page assembly completed.',
-    `${state.pages.length} page contract(s) processed.`,
-    `${state.theme?.tokens ? Object.keys(state.theme.tokens).length : 0} token(s) applied to output templates.`,
-  ]);
-
-  const optimizeJob = createPublishJob(build.id, 'optimize', 'completed', [
-    'Output artifacts were normalized (canonical spacing + deterministic serialization).',
-    'No structural optimization transforms are currently required by this milestone.',
-  ]);
-
-  const checkJob = createPublishJob(
-    build.id,
-    'check',
-    hasBlockers ? 'failed' : 'completed',
-    hasBlockers
-      ? [...checkFailDetails, `Detected ${checkFailCount} release-blocking check report(s).`]
-      : ['All working and release checks passed.'],
-  );
-
-  const exportJob = createPublishJob(
-    build.id,
-    'export',
-    hasBlockers ? 'failed' : 'completed',
-    hasBlockers
-      ? [...checkWarnDetails, `Export blocked by ${checkFailCount} failed checks.`]
-      : ['Export artifact metadata emitted to generated/system files.', ...checkWarnDetails],
-  );
-
-  const pipeline: PublisherPipelineResult = {
-    jobs: [assembleJob, optimizeJob, checkJob, exportJob],
+  return {
+    schemaVersion: '1.0.0',
+    stageOrder: stages.map((stage) => stage.stage),
+    deliveryStage,
+    stages,
+    jobs: stages.map((stage) => createPipelineJob(build.id, stage)),
+    activeStage,
+    failedStage,
     publishContract: buildPublishContract(build, checks, state),
   };
-
-  return pipeline;
 }
 
 function buildPublisherSummary(
@@ -544,50 +532,119 @@ export function assemblePublisherProject(
   registry: PublisherBlockRegistry = publisherBlockRegistry,
   context: PublisherAgentContext = { mode: 'publisher' },
 ): PublisherAssemblyResult {
-  const checks = runPublisherChecks(state, registry);
-  const checksFile = JSON.stringify(checks, null, 2);
+  const deliveryStage: PublisherReleaseDeliveryStage = 'export';
+  const stageResults: PublisherPipelineStageResult[] = [];
+  const files: Record<string, string> = {};
 
-  if (!state.project) {
-    const build = buildPublisherSummary(undefined, checks, {
-      [PUBLISHER_CHECKS_FILE]: checksFile,
+  stageResults.push(
+    createPipelineStageResult(
+      state.project
+        ? {
+            stage: 'assemble',
+            status: 'completed',
+            summary: 'Contract-driven page assembly completed.',
+            details: [
+              `${state.pages.length} page contract(s) processed.`,
+              `${state.theme?.tokens ? Object.keys(state.theme.tokens).length : 0} token(s) applied to output templates.`,
+            ],
+          }
+        : {
+            stage: 'assemble',
+            status: 'failed',
+            summary: 'Assembly could not generate project output because project contract is missing.',
+            details: ['Initialize publisher project metadata before generating release artifacts.'],
+            blockingReason: 'Missing project contract.',
+          },
+    ),
+  );
+
+  if (state.project) {
+    files[PUBLISHER_GENERATED_CSS_FILE] = buildMainCss(state);
+    files[PUBLISHER_GENERATED_JS_FILE] = buildMainJs();
+    files[PUBLISHER_MANIFEST_FILE] = buildManifest(state);
+    files[PUBLISHER_ROBOTS_FILE] = buildRobots(state);
+    files[PUBLISHER_SITEMAP_FILE] = buildSitemap(state);
+
+    state.pages.forEach((page) => {
+      const targetPath =
+        page.path === '/'
+          ? `${PUBLISHER_GENERATED_DIR}/index.html`
+          : `${PUBLISHER_GENERATED_DIR}${page.path}/index.html`;
+      files[targetPath] = buildPageHtml(state, page, registry);
     });
-    const pipeline = buildPublisherPipeline(build, checks, state);
-    build.pipeline = pipeline;
-
-    const files = {
-      [PUBLISHER_CHECKS_FILE]: checksFile,
-      [PUBLISHER_STATE_FILE]: buildPublisherStateFile(undefined, checks, context, build),
-    };
-
-    return {
-      files,
-      checks,
-      build,
-      pipeline,
-    };
   }
 
-  const files: Record<string, string> = {
-    [PUBLISHER_CHECKS_FILE]: checksFile,
-    [PUBLISHER_GENERATED_CSS_FILE]: buildMainCss(state),
-    [PUBLISHER_GENERATED_JS_FILE]: buildMainJs(),
-    [PUBLISHER_MANIFEST_FILE]: buildManifest(state),
-    [PUBLISHER_ROBOTS_FILE]: buildRobots(state),
-    [PUBLISHER_SITEMAP_FILE]: buildSitemap(state),
-  };
+  stageResults.push(
+    createPipelineStageResult({
+      stage: 'optimize',
+      status: 'completed',
+      summary: 'Output artifacts were normalized for deterministic release snapshots.',
+      details: [
+        'Canonical spacing and serialization rules were applied to generated files.',
+        'No additional optimization transforms are currently required by this milestone.',
+      ],
+    }),
+  );
 
-  state.pages.forEach((page) => {
-    const targetPath =
-      page.path === '/' ? `${PUBLISHER_GENERATED_DIR}/index.html` : `${PUBLISHER_GENERATED_DIR}${page.path}/index.html`;
-    files[targetPath] = buildPageHtml(state, page, registry);
-  });
+  const checks = runPublisherChecks(state, registry);
+  const checkFailDetails = checks
+    .filter((report) => report.status === 'fail')
+    .map((check) => `${check.name}: ${check.message}`);
+  const checkWarnDetails = checks
+    .filter((report) => report.status === 'warn')
+    .map((check) => `${check.name}: ${check.message}`);
+  const hasCheckFailures = checkFailDetails.length > 0;
 
-  files[PUBLISHER_PROVENANCE_FILE] = JSON.stringify(buildPublisherProvenance(state, files), null, 2);
+  files[PUBLISHER_CHECKS_FILE] = JSON.stringify(checks, null, 2);
 
-  const build = buildPublisherSummary(state.project.id, checks, files);
-  const pipeline = buildPublisherPipeline(build, checks, state);
+  stageResults.push(
+    createPipelineStageResult(
+      hasCheckFailures
+        ? {
+            stage: 'check',
+            status: 'failed',
+            summary: `Release checks failed with ${checkFailDetails.length} blocking report(s).`,
+            details: checkFailDetails,
+            blockingReason: `${checkFailDetails.length} check report(s) failed.`,
+          }
+        : {
+            stage: 'check',
+            status: 'completed',
+            summary: 'All working and release checks passed.',
+            details:
+              checkWarnDetails.length > 0 ? checkWarnDetails : ['No warnings were emitted during working/release checks.'],
+          },
+    ),
+  );
+
+  if (state.project) {
+    files[PUBLISHER_PROVENANCE_FILE] = JSON.stringify(buildPublisherProvenance(state, files), null, 2);
+  }
+
+  stageResults.push(
+    createPipelineStageResult(
+      hasCheckFailures
+        ? {
+            stage: deliveryStage,
+            status: 'failed',
+            summary: `Export blocked because the check stage reported ${checkFailDetails.length} failure(s).`,
+            details: [...checkFailDetails, ...checkWarnDetails],
+            blockingReason: 'Resolve check-stage failures before exporting release artifacts.',
+          }
+        : {
+            stage: deliveryStage,
+            status: 'completed',
+            summary: 'Export artifact metadata emitted to generated/system files.',
+            details:
+              checkWarnDetails.length > 0 ? checkWarnDetails : ['Release pipeline completed without additional warnings.'],
+          },
+    ),
+  );
+
+  const build = buildPublisherSummary(state.project?.id, checks, files);
+  const pipeline = buildPublisherPipeline(build, checks, state, stageResults, deliveryStage);
   build.pipeline = pipeline;
-  files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project.id, checks, context, build);
+  files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project?.id, checks, context, build);
 
   return { files, checks, build, pipeline };
 }
