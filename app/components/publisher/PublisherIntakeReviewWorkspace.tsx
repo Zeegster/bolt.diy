@@ -13,6 +13,7 @@ import {
   applyIntakeReviewDraft,
   categorizeIntakeCheck,
   createIntakeReviewDraft,
+  deriveBatchNormalizeReviewState,
   getIntakeDiagnosticLabel,
 } from '~/lib/publisher/intake-ui';
 import { IntakeAssetField } from './IntakeAssetField';
@@ -96,6 +97,10 @@ export function PublisherIntakeReviewWorkspace({
   const rawSource = selectedPage?.storedSourcePath
     ? sourceContentByPath[selectedPage.storedSourcePath]
     : sourceContentByPath[selectedPage?.sourcePath ?? ''];
+  const batchNormalizeReview = useMemo(
+    () => deriveBatchNormalizeReviewState(session, selectedBrokenPageIds),
+    [selectedBrokenPageIds, session],
+  );
   const brokenPages = session.pages.filter(isBrokenMetadataPage);
   const selectedPageChecks = selectedPage ? session.checks.filter((check) => check.pageId === selectedPage.id) : [];
   const selectedSourcePath = selectedPage?.storedSourcePath ?? selectedPage?.sourcePath;
@@ -121,13 +126,6 @@ export function PublisherIntakeReviewWorkspace({
       warnings: selectedPage.warnings.map((warning) => warning.message),
     });
   }, [rawSource, selectedPage, selectedSourcePath]);
-  const pageSelectionSummary = useMemo(() => {
-    if (brokenPages.length === 0) {
-      return 'No broken pages';
-    }
-
-    return `${selectedBrokenPageIds.length} selected of ${brokenPages.length} broken`;
-  }, [brokenPages.length, selectedBrokenPageIds.length]);
   const pendingDisambiguation =
     session.disambiguation?.status === 'pending' || session.scenario === 'needsDisambiguation';
   const templateCandidates =
@@ -247,8 +245,8 @@ export function PublisherIntakeReviewWorkspace({
           <div>
             <div className="text-sm font-medium text-bolt-elements-textPrimary">Metadata recovery batch</div>
             <div className="mt-1 text-xs text-bolt-elements-textSecondary">
-              {pageSelectionSummary}. AI only extracts missing title, description, and heading from the first 10 lines
-              of unresolved content.
+              {batchNormalizeReview.selectionSummary}. AI only extracts missing title, description, and heading from the
+              first 10 lines of unresolved content.
             </div>
           </div>
 
@@ -393,6 +391,32 @@ export function PublisherIntakeReviewWorkspace({
                     Intake scan completed without blocking warnings.
                   </div>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+              <h4 className="text-sm font-semibold">Batch normalize audit</h4>
+              <div className="mt-3 space-y-2 text-xs text-bolt-elements-textSecondary">
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Scope is limited to pages with missing title, description, or H1. Complete pages are never included in
+                  the batch payload.
+                </div>
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Affected pages:{' '}
+                  {batchNormalizeReview.affectedPages.length > 0
+                    ? batchNormalizeReview.affectedPages
+                        .map((page) => `${page.name} (${page.missingFields.join(', ')})`)
+                        .join(' · ')
+                    : 'none'}
+                </div>
+                <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2">
+                  Last provider run:{' '}
+                  {batchNormalizeReview.latestBatchRun
+                    ? `${batchNormalizeReview.latestBatchRun.provider ?? 'unknown'} / ${
+                        batchNormalizeReview.latestBatchRun.model ?? 'unknown-model'
+                      } · ${batchNormalizeReview.latestBatchRun.outputSummary}`
+                    : 'none recorded yet'}
+                </div>
               </div>
             </div>
 

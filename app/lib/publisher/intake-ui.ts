@@ -1,6 +1,7 @@
 import type {
   CheckReport,
   IntakeCheck,
+  IntakeSession,
   IntakePageDraft as IntakeReviewPage,
   PageContract,
   PublisherMarkdownSource,
@@ -48,6 +49,29 @@ export interface IntakePageDraft {
   metadataIssueCount: number;
   extractionIssueCount: number;
   contractIssueCount: number;
+}
+
+export interface IntakeBatchNormalizeReviewState {
+  brokenPageIds: string[];
+  selectedPageIds: string[];
+  selectedCount: number;
+  totalBrokenCount: number;
+  selectionSummary: string;
+  affectedPages: Array<{
+    id: string;
+    name: string;
+    path: string;
+    missingFields: Array<'title' | 'description' | 'h1'>;
+  }>;
+  latestBatchRun?: {
+    id: string;
+    provider?: string;
+    model?: string;
+    createdAt: string;
+    inputSummary: string;
+    outputSummary: string;
+    success: boolean;
+  };
 }
 
 export type IntakeDiagnosticCategory = 'metadata' | 'zone' | 'ownership' | 'deprecated' | 'content';
@@ -180,6 +204,61 @@ function isMetadataCheck(check: IntakeCheck) {
     check.id === 'missing-page-description' ||
     check.id === 'missing-page-h1'
   );
+}
+
+function getMissingMetadataFields(page: IntakeReviewPage): Array<'title' | 'description' | 'h1'> {
+  return [
+    !page.title.trim() ? 'title' : undefined,
+    !page.description?.trim() ? 'description' : undefined,
+    !page.h1?.trim() ? 'h1' : undefined,
+  ].filter((value): value is 'title' | 'description' | 'h1' => Boolean(value));
+}
+
+function isBatchNormalizeRun(run: IntakeSession['scriptRuns'][number]) {
+  return run.runnerKind === 'ai-extraction' && run.inputSummary.startsWith('batch:');
+}
+
+export function deriveBatchNormalizeReviewState(
+  session: IntakeSession,
+  selectedBrokenPageIds: string[],
+): IntakeBatchNormalizeReviewState {
+  const affectedPages = session.pages
+    .map((page) => ({
+      id: page.id,
+      name: page.name,
+      path: page.path,
+      missingFields: getMissingMetadataFields(page),
+    }))
+    .filter((page) => page.missingFields.length > 0);
+  const brokenPageIds = affectedPages.map((page) => page.id);
+  const selectedPageIds =
+    selectedBrokenPageIds.length > 0
+      ? selectedBrokenPageIds.filter((pageId) => brokenPageIds.includes(pageId))
+      : brokenPageIds;
+  const latestBatchRun = [...session.scriptRuns].reverse().find(isBatchNormalizeRun);
+
+  return {
+    brokenPageIds,
+    selectedPageIds,
+    selectedCount: selectedPageIds.length,
+    totalBrokenCount: brokenPageIds.length,
+    selectionSummary:
+      brokenPageIds.length === 0
+        ? 'No broken pages'
+        : `${selectedPageIds.length} selected of ${brokenPageIds.length} broken · missing metadata only`,
+    affectedPages,
+    latestBatchRun: latestBatchRun
+      ? {
+          id: latestBatchRun.id,
+          provider: latestBatchRun.provider,
+          model: latestBatchRun.model,
+          createdAt: latestBatchRun.createdAt,
+          inputSummary: latestBatchRun.inputSummary,
+          outputSummary: latestBatchRun.outputSummary,
+          success: latestBatchRun.success,
+        }
+      : undefined,
+  };
 }
 
 function isExtractionCheck(check: IntakeCheck) {

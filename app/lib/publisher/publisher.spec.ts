@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { JSDOM } from 'jsdom';
 import { PublisherBlockRegistry, publisherBlockRegistry } from './block-registry';
 import { describePublisherSlotEditing, loadPublisherState } from './contracts';
 import { assemblePublisherProject } from './assembler';
@@ -7,6 +8,7 @@ import { buildCanonicalUrl } from './metadata';
 import { derivePublisherWorkflowState } from './status';
 import { buildIntakePageChecks } from './intake';
 import { buildPublisherContractsFromIntakeSession } from './intake-pipeline';
+import { buildImportedBundleAdapter } from './intake-adapter';
 import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
@@ -21,6 +23,102 @@ import {
   PUBLISHER_THEME_FILE,
 } from './constants';
 import type { PublisherBlockDefinition } from '~/types/publisher';
+import type { IntakeSourceSnapshot } from '~/types/publisher';
+
+function createHtmlDocument(html: string) {
+  return new JSDOM(html).window.document;
+}
+
+function htmlSource(path: string, html: string): IntakeSourceSnapshot {
+  return {
+    id: path,
+    path,
+    kind: 'file',
+    mimeType: 'text/html',
+    size: html.length,
+    isBinary: false,
+    html,
+  };
+}
+
+function markdownSource(path: string, text: string): IntakeSourceSnapshot {
+  return {
+    id: path,
+    path,
+    kind: 'file',
+    mimeType: 'text/markdown',
+    size: text.length,
+    isBinary: false,
+    text,
+  };
+}
+
+const importedHtmlBundleFixture: IntakeSourceSnapshot[] = [
+  htmlSource(
+    'index.html',
+    '<!doctype html><html><head><title>Fixture Shell</title></head><body><header>Shell</header><main><h1>Fixture Shell</h1></main></body></html>',
+  ),
+  htmlSource(
+    'pages/index.html',
+    '<!doctype html><html><head><title>Fixture Home</title><meta name="description" content="Fixture home description"></head><body><article><h1>Fixture Home</h1><p>Welcome home.</p></article></body></html>',
+  ),
+  htmlSource(
+    'pages/privacy.html',
+    '<!doctype html><html><head><title>Privacy Policy</title><meta name="description" content="Privacy fixture page"></head><body><article><h1>Privacy Policy</h1><p>Privacy body.</p></article></body></html>',
+  ),
+  markdownSource(
+    'content-source/index.md',
+    `---
+title: Fixture Home
+description: Fixture reference home
+h1: Fixture Home
+---
+
+# Fixture Home
+
+Reference content.`,
+  ),
+];
+
+function createImportedPublisherState(overrides?: {
+  mutateSession?: (session: ReturnType<typeof buildImportedBundleAdapter>['session']) => void;
+}) {
+  const result = buildImportedBundleAdapter({
+    sessionId: 'publisher-imported-fixture',
+    sourceLabel: '/fixtures/imported-html-bundle',
+    importKind: 'html',
+    sources: importedHtmlBundleFixture,
+    project: {
+      name: 'Imported Fixture',
+      domain: 'fixture.example',
+      defaultLanguage: 'en',
+      multilingual: false,
+      languages: ['en'],
+    },
+    htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    now: '2026-03-30T12:30:00.000Z',
+  });
+  const session = {
+    ...result.session,
+    status: 'ready' as const,
+  };
+
+  overrides?.mutateSession?.(session);
+
+  const applied = buildPublisherContractsFromIntakeSession(session);
+  const files = Object.fromEntries(
+    Object.entries(applied.files).map(([filePath, content]) => [
+      filePath,
+      {
+        type: 'file',
+        isBinary: content instanceof Uint8Array,
+        content: content instanceof Uint8Array ? '' : content,
+      },
+    ]),
+  ) as FileMap;
+
+  return loadPublisherState(files);
+}
 
 function createPublisherFiles(): FileMap {
   return {
@@ -1117,5 +1215,46 @@ describe('publisher workflow', () => {
 
     expect(normalized.artifacts[0]?.path).toContain('provenance.json');
     expect(normalized.artifacts[1]?.path).toContain('robots.txt');
+  });
+
+  it('allows imported pack fixtures to reach release-ready output when normalized correctly', () => {
+    const state = createImportedPublisherState();
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+
+    expect(result.build.releaseFailures).toBe(0);
+    expect(result.pipeline.publishContract.canPublish).toBe(true);
+    expect(result.files['/home/project/.bolt/publisher/generated/index.html']).toContain('Fixture Home');
+  });
+
+  it('fails release checks for imported pack fixtures when metadata remains unresolved', () => {
+    const state = createImportedPublisherState();
+    const home = state.pages.find((page) => page.slug === 'home');
+
+    if (home) {
+      home.seo.title = '';
+      home.seo.description = '';
+    }
+
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+
+    expect(checks.some((check) => check.status === 'fail')).toBe(true);
+    expect(checks.some((check) => check.name === 'metadata-completeness')).toBe(true);
+  });
+
+  it('fails release checks for imported pack fixtures on unsafe links and internal publisher leaks', () => {
+    const state = createImportedPublisherState();
+    const home = state.pages.find((page) => page.slug === 'home');
+    const firstSlot = home?.zones.content?.slots[0];
+
+    if (firstSlot) {
+      firstSlot.props.primaryCtaHref = 'javascript:alert(1)';
+      firstSlot.props.image = '/.bolt/publisher/assets/private.png';
+    }
+
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+    const failureNames = checks.filter((check) => check.status === 'fail').map((check) => check.name);
+
+    expect(failureNames).toContain('link-policy');
+    expect(failureNames).toContain('managed-asset-internal-path');
   });
 });

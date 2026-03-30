@@ -649,6 +649,7 @@ export function StructureView() {
         return rawSource ? buildIntakeAiBatchPageInput(page, rawSource) : undefined;
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    const payloadScopeSummary = payload.map((page) => page.slug).join(', ');
 
     if (payload.length === 0) {
       toast.error('No raw source is available for the selected broken pages.');
@@ -663,16 +664,21 @@ export function StructureView() {
         providerName: runtime.providerName,
         model: runtime.model,
       });
+      const auditedScriptRun = {
+        ...result.scriptRun,
+        inputSummary: `batch:${payload.length} pages · ${payloadScopeSummary}`,
+        outputSummary: `pages:${result.result.pages.length} · missing metadata only`,
+      };
       const applySuggestion = window.confirm(
         `Apply extracted title, description, and heading to ${payload.length} broken page${payload.length > 1 ? 's' : ''}? Only empty fields will be filled.`,
       );
 
       if (applySuggestion) {
-        await applyBatchMetadataResult(brokenPages, result);
+        await applyBatchMetadataResult(brokenPages, { ...result, scriptRun: auditedScriptRun });
       } else if (intakeDraft) {
         const nextSession: IntakeSession = {
           ...intakeDraft,
-          scriptRuns: [...intakeDraft.scriptRuns, { ...result.scriptRun, sessionId: intakeDraft.id }],
+          scriptRuns: [...intakeDraft.scriptRuns, { ...auditedScriptRun, sessionId: intakeDraft.id }],
           updatedAt: new Date().toISOString(),
         };
 

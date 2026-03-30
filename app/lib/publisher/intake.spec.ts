@@ -27,6 +27,7 @@ import {
   saveIntakeSession,
 } from './intake-session';
 import { buildImportedBundleAdapter } from './intake-adapter';
+import { deriveBatchNormalizeReviewState } from './intake-ui';
 
 function createHtmlDocument(html: string) {
   return new JSDOM(html).window.document;
@@ -213,6 +214,33 @@ First paragraph.
     text: '{}',
   },
   binarySource('brochure.pdf'),
+];
+
+const contentSourceFixture: IntakeSourceSnapshot[] = [
+  markdownSource(
+    'content-source/index.md',
+    `---
+title: Fixture Home
+description: Fixture markdown homepage
+h1: Fixture Home
+---
+
+# Fixture Home
+
+Primary content.`,
+  ),
+  markdownSource(
+    'content-source/about.md',
+    `---
+title: About Fixture
+description: Fixture about page
+h1: About Fixture
+---
+
+# About Fixture
+
+Secondary content.`,
+  ),
 ];
 
 afterEach(() => {
@@ -757,6 +785,104 @@ Repeated heading.`,
       sourceManifest?.sources.map((source) => source.storedPath),
     );
     expect(loadedFromStorage?.scriptRuns).toEqual(result.session.scriptRuns);
+  });
+
+  it('batch normalize only targets missing metadata pages', () => {
+    const result = buildImportedBundleAdapter({
+      sessionId: 'imported-batch-review',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        defaultLanguage: 'fr',
+        multilingual: true,
+        languages: ['fr', 'en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+    const [firstPage, secondPage] = result.session.pages;
+    const session = {
+      ...result.session,
+      pages: result.session.pages.map((page) => {
+        if (page.id === firstPage?.id) {
+          return {
+            ...page,
+            title: '',
+            description: '',
+            h1: '',
+          };
+        }
+
+        if (page.id === secondPage?.id) {
+          return {
+            ...page,
+            title: page.title || 'Complete title',
+            description: page.description || 'Complete description',
+            h1: page.h1 || 'Complete heading',
+          };
+        }
+
+        return page;
+      }),
+      scriptRuns: [
+        {
+          id: 'batch-run-1',
+          runnerKind: 'ai-extraction' as const,
+          provider: 'openai' as const,
+          model: 'gpt-4.1-mini',
+          inputSummary: `batch:1 pages · ${firstPage?.slug ?? 'home'}`,
+          outputSummary: 'pages:1 · missing metadata only',
+          success: true,
+          createdAt: '2026-03-30T12:05:00.000Z',
+        },
+      ],
+    };
+
+    const reviewState = deriveBatchNormalizeReviewState(session, secondPage?.id ? [secondPage.id] : []);
+
+    expect(reviewState.brokenPageIds).toEqual([firstPage?.id]);
+    expect(reviewState.selectedPageIds).toEqual([]);
+    expect(reviewState.selectionSummary).toContain('missing metadata only');
+    expect(reviewState.affectedPages[0]?.missingFields).toEqual(['title', 'description', 'h1']);
+    expect(reviewState.latestBatchRun?.outputSummary).toBe('pages:1 · missing metadata only');
+  });
+
+  it('classifies imported pack fixtures', () => {
+    const htmlBundle = buildImportedBundleAdapter({
+      sessionId: 'fixture-html-bundle',
+      sourceLabel: '/fixtures/html-bundle',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Fixture HTML',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+    const contentSource = buildImportedBundleAdapter({
+      sessionId: 'fixture-content-source',
+      sourceLabel: '/fixtures/content-source',
+      importKind: 'document',
+      sources: contentSourceFixture,
+      project: {
+        name: 'Fixture Markdown',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+    });
+
+    expect(htmlBundle.session.scenario).toBe('template-plus-documents');
+    expect(htmlBundle.session.activeContentFamily).toBe('html');
+    expect(htmlBundle.session.referenceSourceFamily).toBe('document');
+    expect(contentSource.session.scenario).toBe('document-import');
+    expect(contentSource.session.activeContentFamily).toBe('document');
+    expect(contentSource.session.pages.map((page) => page.sourcePath)).toEqual(
+      expect.arrayContaining(['content-source/index.md', 'content-source/about.md']),
+    );
   });
 
   it('preserves raw markdown source across intake artifact roundtrip', () => {
