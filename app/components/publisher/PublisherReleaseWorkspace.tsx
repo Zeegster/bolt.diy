@@ -56,6 +56,7 @@ interface PublisherReleaseWorkspaceProps {
   checks: CheckReport[];
   buildHistory: PublisherBuildSummary[];
   onOpenChecks?: () => void;
+  onOpenProvenance?: () => void;
   onOpenState?: () => void;
   onOpenManifest?: () => void;
   onOpenSitemap?: () => void;
@@ -68,6 +69,7 @@ export function PublisherReleaseWorkspace({
   checks,
   buildHistory,
   onOpenChecks,
+  onOpenProvenance,
   onOpenState,
   onOpenManifest,
   onOpenSitemap,
@@ -167,6 +169,14 @@ export function PublisherReleaseWorkspace({
         </button>
         <button
           type="button"
+          onClick={onOpenProvenance}
+          className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!onOpenProvenance}
+        >
+          Open provenance.json
+        </button>
+        <button
+          type="button"
           onClick={onOpenManifest}
           className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!onOpenManifest}
@@ -261,6 +271,27 @@ export function PublisherReleaseWorkspace({
               <span>Artifacts</span>
               <span className="text-bolt-elements-textPrimary">{latestBuild.artifacts.length}</span>
             </div>
+            {latestBuild.artifacts.length > 0 ? (
+              <div className="pt-2">
+                <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+                  Artifact details
+                </div>
+                <div className="space-y-2">
+                  {latestBuild.artifacts.slice(0, 6).map((artifact) => (
+                    <div
+                      key={artifact.path}
+                      className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2"
+                    >
+                      <div className="truncate text-bolt-elements-textPrimary">{artifact.path}</div>
+                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-bolt-elements-textSecondary">
+                        <span>{artifact.contentType}</span>
+                        <span>{artifact.fingerprint}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="mt-2 text-sm text-bolt-elements-textSecondary">No build history recorded yet.</div>

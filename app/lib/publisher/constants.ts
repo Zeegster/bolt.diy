@@ -22,6 +22,7 @@ export const PUBLISHER_STATE_FILE = `${PUBLISHER_ROOT}/state.json`;
 export const PUBLISHER_MANIFEST_FILE = `${PUBLISHER_GENERATED_DIR}/site.webmanifest`;
 export const PUBLISHER_ROBOTS_FILE = `${PUBLISHER_GENERATED_DIR}/robots.txt`;
 export const PUBLISHER_SITEMAP_FILE = `${PUBLISHER_GENERATED_DIR}/sitemap.xml`;
+export const PUBLISHER_PROVENANCE_FILE = `${PUBLISHER_GENERATED_DIR}/provenance.json`;
 
 export function getPublisherPageFilePath(slug: string) {
   return `${PUBLISHER_PAGES_DIR}/${slug}.json`;

@@ -8,7 +8,7 @@ The codebase already contains a real publisher foundation inside a larger AI wor
 
 - [x] **Phase 1: Contract Safety and Registry v2** - Finish the rules that make publisher output predictable before more workflow surface is added. Completed 2026-03-30.
 - [x] **Phase 2: Operator Review Workflow** - Turn the current review workbench into an explicit intake/review/release operator flow. Completed 2026-03-30.
-- [ ] **Phase 3: Deterministic Assets and Provenance** - Make asset handling and generated outputs stable enough for release operations.
+- [x] **Phase 3: Deterministic Assets and Provenance** - Make asset handling and generated outputs stable enough for release operations. (completed 2026-03-30)
 - [ ] **Phase 4: Release Pipeline and Quality Gates** - Separate assemble/optimize/check/publish and enforce release-grade verification.
 - [ ] **Phase 5: Agent Operating Model** - Lock down how agents interact with publisher files, blocks, contracts, and repair loops.
 - [ ] **Phase 6: Batch Readiness** - Add queue/inbox, throughput visibility, and server-ready seams after the single-operator workflow is stable.
@@ -57,9 +57,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Implement asset ingestion helpers, hashing, path normalization, and image metadata capture.
-- [ ] 03-02: Extend assembler/build outputs with deterministic manifest and provenance records.
-- [ ] 03-03: Surface artifact and build-history data in release-facing UI.
+- [x] 03-01: Implement asset ingestion helpers, hashing, path normalization, and image metadata capture.
+- [x] 03-02: Extend assembler/build outputs with deterministic manifest and provenance records.
+- [x] 03-03: Surface artifact and build-history data in release-facing UI.
 
 ### Phase 4: Release Pipeline and Quality Gates
 **Goal**: Publisher flow becomes a proper release pipeline with optimization, validation, and publish contract boundaries.
@@ -116,7 +116,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Contract Safety and Registry v2 | 3/3 | Complete | 2026-03-30 |
 | 2. Operator Review Workflow | 4/4 | Complete | 2026-03-30 |
-| 3. Deterministic Assets and Provenance | 0/3 | Not started | - |
+| 3. Deterministic Assets and Provenance | 3/3 | Complete   | 2026-03-30 |
 | 4. Release Pipeline and Quality Gates | 0/4 | Not started | - |
 | 5. Agent Operating Model | 0/3 | Not started | - |
 | 6. Batch Readiness | 0/3 | Not started | - |

@@ -9,6 +9,33 @@ function sanitizeFileName(fileName: string) {
     .replace(/[^a-z0-9._-]/g, '');
 }
 
+function splitFileName(fileName: string) {
+  const sanitized = sanitizeFileName(fileName);
+  const lastDot = sanitized.lastIndexOf('.');
+
+  if (lastDot <= 0) {
+    return {
+      stem: sanitized || 'asset',
+      extension: '',
+    };
+  }
+
+  return {
+    stem: sanitized.slice(0, lastDot) || 'asset',
+    extension: sanitized.slice(lastDot),
+  };
+}
+
+export function fingerprintBytes(bytes: Uint8Array) {
+  let hash = 5381;
+
+  for (const value of bytes) {
+    hash = (hash * 33) ^ value;
+  }
+
+  return `a${(hash >>> 0).toString(16)}`;
+}
+
 export async function fileToUint8Array(file: File) {
   const buffer = await file.arrayBuffer();
   return new Uint8Array(buffer);
@@ -24,17 +51,54 @@ export async function fileToDataUrl(file: File) {
   });
 }
 
+export async function readImageDimensions(file: File) {
+  if (!file.type.startsWith('image/')) {
+    return undefined;
+  }
+
+  return new Promise<{ width: number; height: number } | undefined>((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    image.onerror = () => {
+      resolve(undefined);
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 export function createPublisherAssetRef(
   kind: 'favicon' | 'metaImage' | 'logo',
   fileName: string,
   mimeType?: string,
+  options?: {
+    bytes?: Uint8Array;
+    width?: number;
+    height?: number;
+  },
 ): AssetRef {
-  const safeName = sanitizeFileName(fileName) || `${kind}.bin`;
+  const { stem, extension } = splitFileName(fileName);
+  const contentHash = options?.bytes ? fingerprintBytes(options.bytes) : undefined;
+  const deterministicName = contentHash ? `${kind}-${stem}-${contentHash}${extension}` : `${kind}-${stem}${extension}`;
+
   return {
-    path: `${PUBLISHER_ASSETS_DIR}/${kind}-${safeName}`,
-    publicPath: `/assets/site/${kind}-${safeName}`,
+    path: `${PUBLISHER_ASSETS_DIR}/${deterministicName}`,
+    publicPath: `/assets/site/${deterministicName}`,
     mimeType,
     label: fileName,
+    contentHash,
+    width: options?.width,
+    height: options?.height,
   };
 }
 

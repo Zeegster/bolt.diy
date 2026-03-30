@@ -88,6 +88,9 @@ const assetRefSchema = z.object({
   publicPath: z.string().optional(),
   mimeType: z.string().optional(),
   label: z.string().optional(),
+  contentHash: z.string().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
 });
 
 const pageContractSchema = z.object({
@@ -242,6 +245,9 @@ const publisherAssetMaterializationSchema = z.object({
   storedPath: z.string().optional(),
   publicPath: z.string().optional(),
   previewPath: z.string().optional(),
+  contentHash: z.string().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
 });
 
 const publisherReferenceStateSchema = z.object({

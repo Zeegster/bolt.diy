@@ -24,6 +24,13 @@ export interface PersistedPublisherProjectState {
 
 type PersistedPublisherMap = Record<string, PersistedPublisherProjectState>;
 
+export function normalizePublisherBuildSummary(build: PublisherBuildSummary): PublisherBuildSummary {
+  return {
+    ...build,
+    artifacts: [...(build.artifacts ?? [])].sort((left, right) => left.path.localeCompare(right.path)),
+  };
+}
+
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
@@ -54,7 +61,16 @@ export function loadPublisherProjectState(projectId?: string): PersistedPublishe
     return undefined;
   }
 
-  return loadAllProjects()[projectId];
+  const project = loadAllProjects()[projectId];
+
+  if (!project) {
+    return undefined;
+  }
+
+  return {
+    ...project,
+    buildHistory: project.buildHistory?.map(normalizePublisherBuildSummary) ?? [],
+  };
 }
 
 export function savePublisherProjectState(
@@ -72,7 +88,7 @@ export function savePublisherProjectState(
     ...previous,
     ...patch,
     agentHistory: patch.agentHistory ?? previous.agentHistory,
-    buildHistory: patch.buildHistory ?? previous.buildHistory ?? [],
+    buildHistory: (patch.buildHistory ?? previous.buildHistory ?? []).map(normalizePublisherBuildSummary),
   };
 
   saveAllProjects(current);

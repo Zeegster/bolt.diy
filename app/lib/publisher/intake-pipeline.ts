@@ -219,6 +219,9 @@ function createProjectAssetRef(asset?: IntakeSession['project']['favicon']): Ass
     label: asset.label,
     storedPath: asset.storedPath,
     previewPath: asset.previewPath ?? asset.previewUrl,
+    contentHash: asset.contentHash,
+    width: asset.width,
+    height: asset.height,
   };
 }
 
@@ -649,6 +652,9 @@ export function buildPublisherContractsFromIntakeSession(session: IntakeSession)
         storedPath: session.project.favicon?.storedPath ?? session.project.favicon?.path,
         publicPath: session.project.favicon?.publicPath,
         previewPath: session.project.favicon?.previewPath,
+        contentHash: session.project.favicon?.contentHash,
+        width: session.project.favicon?.width,
+        height: session.project.favicon?.height,
       },
       {
         kind: 'logo' as const,
@@ -656,6 +662,9 @@ export function buildPublisherContractsFromIntakeSession(session: IntakeSession)
         storedPath: session.project.logo?.storedPath ?? session.project.logo?.path,
         publicPath: session.project.logo?.publicPath,
         previewPath: session.project.logo?.previewPath,
+        contentHash: session.project.logo?.contentHash,
+        width: session.project.logo?.width,
+        height: session.project.logo?.height,
       },
       {
         kind: 'metaImage' as const,
@@ -663,6 +672,9 @@ export function buildPublisherContractsFromIntakeSession(session: IntakeSession)
         storedPath: session.project.metaImage?.storedPath ?? session.project.metaImage?.path,
         publicPath: session.project.metaImage?.publicPath,
         previewPath: session.project.metaImage?.previewPath,
+        contentHash: session.project.metaImage?.contentHash,
+        width: session.project.metaImage?.width,
+        height: session.project.metaImage?.height,
       },
     ].filter((asset) => asset.sourcePath || asset.storedPath),
     sourceFiles: session.sources.map((source) => ({

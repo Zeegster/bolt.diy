@@ -9,7 +9,8 @@
     "nyquist_validation": true,
     "discuss_mode": "discuss",
     "research_before_questions": false,
-    "_auto_chain_active": false
+    "_auto_chain_active": false,
+    "skip_discuss": true
   },
   "planning": {
     "commit_docs": true,

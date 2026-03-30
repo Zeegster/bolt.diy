@@ -13,6 +13,7 @@ import {
   PUBLISHER_CHECKS_FILE,
   PUBLISHER_GENERATED_DIR,
   PUBLISHER_MANIFEST_FILE,
+  PUBLISHER_PROVENANCE_FILE,
   PUBLISHER_PROJECT_FILE,
   PUBLISHER_ROBOTS_FILE,
   PUBLISHER_REFERENCES_FILE,
@@ -22,7 +23,12 @@ import {
   getPublisherPageFilePath,
 } from '~/lib/publisher/constants';
 import { loadPublisherState } from '~/lib/publisher/contracts';
-import { createPublisherAssetRef, fileToUint8Array, getGeneratedAssetPath } from '~/lib/publisher/file-helpers';
+import {
+  createPublisherAssetRef,
+  fileToUint8Array,
+  getGeneratedAssetPath,
+  readImageDimensions,
+} from '~/lib/publisher/file-helpers';
 import { loadIntakeSession } from '~/lib/publisher/intake-files';
 import {
   buildIntakePageChecks,
@@ -886,9 +892,15 @@ export function StructureView() {
           continue;
         }
 
-        const assetRef = createPublisherAssetRef(assetName, file.name, file.type || undefined);
+        const fileBytes = await fileToUint8Array(file);
+        const dimensions = await readImageDimensions(file);
+        const assetRef = createPublisherAssetRef(assetName, file.name, file.type || undefined, {
+          bytes: fileBytes,
+          width: dimensions?.width,
+          height: dimensions?.height,
+        });
         assetOverrides[assetName] = assetRef;
-        await workbenchStore.writeSystemFile(assetRef.path, await fileToUint8Array(file));
+        await workbenchStore.writeSystemFile(assetRef.path, fileBytes);
       }
 
       const nextProject = buildUpdatedProjectContract(publisherState.project, payload.settings, assetOverrides);
@@ -1015,6 +1027,7 @@ export function StructureView() {
       onOpenReferences={() => openFile(PUBLISHER_REFERENCES_FILE)}
       onOpenSourceFile={(filePath: string) => openFile(filePath)}
       onOpenOutput={(page: PageContract) => openFile(getGeneratedPagePath(page))}
+      onOpenProvenance={() => openFile(PUBLISHER_PROVENANCE_FILE)}
       onOpenState={() => openFile(PUBLISHER_STATE_FILE)}
       onOpenManifest={() => openFile(PUBLISHER_MANIFEST_FILE)}
       onOpenSitemap={() => openFile(PUBLISHER_SITEMAP_FILE)}

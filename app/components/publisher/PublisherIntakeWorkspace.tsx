@@ -55,6 +55,7 @@ interface PublisherIntakeWorkspaceProps {
   onOpenReferences?: () => void;
   onOpenSourceFile?: (path: string) => void;
   onOpenOutput?: (page: PageContract) => void;
+  onOpenProvenance?: () => void;
   onOpenState?: () => void;
   onOpenManifest?: () => void;
   onOpenSitemap?: () => void;
@@ -124,6 +125,7 @@ export function PublisherIntakeWorkspace({
   onOpenReferences,
   onOpenSourceFile,
   onOpenOutput,
+  onOpenProvenance,
   onOpenState,
   onOpenManifest,
   onOpenSitemap,
@@ -382,6 +384,7 @@ export function PublisherIntakeWorkspace({
               checks={checks}
               buildHistory={buildHistory}
               onOpenChecks={onOpenChecks}
+              onOpenProvenance={onOpenProvenance}
               onOpenState={onOpenState}
               onOpenManifest={onOpenManifest}
               onOpenSitemap={onOpenSitemap}

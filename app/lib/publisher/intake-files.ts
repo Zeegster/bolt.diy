@@ -94,6 +94,9 @@ const intakeAssetDraftSchema = z
     path: z.string().optional(),
     publicPath: z.string().optional(),
     previewUrl: z.string().optional(),
+    contentHash: z.string().optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
   })
   .passthrough();
 

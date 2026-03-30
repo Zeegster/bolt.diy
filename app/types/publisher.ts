@@ -6,7 +6,10 @@ export type ZoneType = (typeof publisherZoneTypes)[number];
 export type PublisherBlockSource = 'library' | 'agent' | 'user';
 export type PublisherCheckStatus = 'pass' | 'warn' | 'fail';
 export type PublisherAgentMode = 'publisher' | 'editor' | 'general';
-export type PublisherJobStage = 'intake' | 'contract' | 'assemble' | 'optimize' | 'check' | 'export';
+export const publisherReleasePipelineStages = ['assemble', 'optimize', 'check', 'export'] as const;
+export type PublisherReleasePipelineStage = (typeof publisherReleasePipelineStages)[number];
+export type PublisherPipelineStageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export type PublisherJobStage = 'intake' | 'contract' | PublisherReleasePipelineStage;
 export type PublisherProjectStatus =
   | 'draft'
   | 'intake-review'
@@ -43,6 +46,9 @@ export interface AssetRef {
   label?: string;
   storedPath?: string;
   previewPath?: string;
+  contentHash?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface IntakeSourceSnapshot {
@@ -74,6 +80,9 @@ export interface IntakeAssetDraft {
   path?: string;
   publicPath?: string;
   previewUrl?: string;
+  contentHash?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface IntakeWarning {
@@ -453,6 +462,52 @@ export interface PublisherBuildArtifact {
   fingerprint: string;
 }
 
+export interface PublisherPublishContract {
+  schemaVersion: '1.0.0';
+  buildId: string;
+  projectId?: string;
+  generatedAt: string;
+  canPublish: boolean;
+  publishWarnings: string[];
+  publishBlockers: string[];
+  sourceFingerprint: string;
+  artifactFingerprint: string;
+  rollback: {
+    strategy: 'rebuild';
+    keepLastBuilds: number;
+  };
+}
+
+export interface PublisherPipelineStageResult {
+  stage: PublisherReleasePipelineStage;
+  status: PublisherPipelineStageStatus;
+  startedAt?: string;
+  finishedAt?: string;
+  summary: string;
+  details: string[];
+  blockingReason?: string;
+}
+
+export interface PublisherPipelineResult {
+  stages: PublisherPipelineStageResult[];
+  jobs: PublisherJob[];
+  activeStage: PublisherReleasePipelineStage;
+  failedStage?: PublisherReleasePipelineStage;
+  publishContract: PublisherPublishContract;
+}
+
+export interface PublisherBuildProvenance {
+  projectId?: string;
+  importKind?: IntakeImportKind;
+  sourceRoot?: string;
+  sourceLabel?: string;
+  templateCandidatePath?: string;
+  homePageCandidatePath?: string;
+  pageSourceMap: PublisherPageSourceMapping[];
+  assetMaterialization: PublisherAssetMaterialization[];
+  artifacts: PublisherBuildArtifact[];
+}
+
 export interface PublisherBuildSummary {
   id: string;
   createdAt: string;
@@ -463,12 +518,13 @@ export interface PublisherBuildSummary {
   releaseFailures: number;
   warningCount: number;
   artifacts: PublisherBuildArtifact[];
+  pipeline?: PublisherPipelineResult;
 }
 
 export interface PublisherJob {
   id: string;
   stage: PublisherJobStage;
-  status: 'idle' | 'running' | 'completed' | 'failed';
+  status: PublisherPipelineStageStatus | 'idle';
   startedAt?: string;
   finishedAt?: string;
   projectId?: string;
@@ -482,6 +538,9 @@ export interface PublisherWorkflowState {
   summary: string;
   nextAction: string;
   blockingReason?: string;
+  releaseStage?: PublisherReleasePipelineStage;
+  releaseStageStatus?: PublisherPipelineStageStatus;
+  releaseFailureStage?: PublisherReleasePipelineStage;
 }
 
 export interface LoadedPublisherState {
@@ -536,6 +595,9 @@ export interface PublisherAssetMaterialization {
   storedPath?: string;
   publicPath?: string;
   previewPath?: string;
+  contentHash?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface PublisherReferenceState {
@@ -558,4 +620,5 @@ export interface PublisherAssemblyResult {
   files: Record<string, string>;
   checks: CheckReport[];
   build: PublisherBuildSummary;
+  pipeline: PublisherPipelineResult;
 }
