@@ -9,7 +9,7 @@ The codebase already contains a real publisher foundation inside a larger AI wor
 - [x] **Phase 1: Contract Safety and Registry v2** - Finish the rules that make publisher output predictable before more workflow surface is added. Completed 2026-03-30.
 - [x] **Phase 2: Operator Review Workflow** - Turn the current review workbench into an explicit intake/review/release operator flow. Completed 2026-03-30.
 - [x] **Phase 3: Deterministic Assets and Provenance** - Make asset handling and generated outputs stable enough for release operations. (completed 2026-03-30)
-- [ ] **Phase 4: Release Pipeline and Quality Gates** - Separate assemble/optimize/check/publish and enforce release-grade verification.
+- [x] **Phase 4: Release Pipeline and Quality Gates** - Separate assemble/optimize/check/publish and enforce release-grade verification. (completed 2026-03-30)
 - [ ] **Phase 5: Agent Operating Model** - Lock down how agents interact with publisher files, blocks, contracts, and repair loops.
 - [ ] **Phase 6: Batch Readiness** - Add queue/inbox, throughput visibility, and server-ready seams after the single-operator workflow is stable.
 
@@ -117,6 +117,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Contract Safety and Registry v2 | 3/3 | Complete | 2026-03-30 |
 | 2. Operator Review Workflow | 4/4 | Complete | 2026-03-30 |
 | 3. Deterministic Assets and Provenance | 3/3 | Complete   | 2026-03-30 |
-| 4. Release Pipeline and Quality Gates | 0/4 | Not started | - |
+| 4. Release Pipeline and Quality Gates | 0/4 | Complete    | 2026-03-30 |
 | 5. Agent Operating Model | 0/3 | Not started | - |
 | 6. Batch Readiness | 0/3 | Not started | - |
