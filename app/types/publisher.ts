@@ -464,20 +464,34 @@ export interface PublisherBuildArtifact {
   fingerprint: string;
 }
 
+export interface PublisherPublishArtifactRef {
+  path: string;
+  contentType: 'json';
+  schemaVersion: '1.0.0';
+  generatedAt: string;
+}
+
+export interface PublisherPublishRollbackContract {
+  strategy: 'rebuild';
+  keepLastBuilds: number;
+  sourceOfTruth?: Array<'project' | 'theme' | 'pages' | 'references' | 'checks'>;
+  requiredArtifacts?: string[];
+}
+
 export interface PublisherPublishContract {
   schemaVersion: '1.0.0';
   buildId: string;
   projectId?: string;
   generatedAt: string;
+  deliveryStage?: PublisherReleaseDeliveryStage;
+  artifactPath?: string;
+  artifact?: PublisherPublishArtifactRef;
   canPublish: boolean;
   publishWarnings: string[];
   publishBlockers: string[];
   sourceFingerprint: string;
   artifactFingerprint: string;
-  rollback: {
-    strategy: 'rebuild';
-    keepLastBuilds: number;
-  };
+  rollback: PublisherPublishRollbackContract;
 }
 
 export interface PublisherPipelineStageResult {
@@ -509,6 +523,7 @@ export interface PublisherBuildProvenance {
   sourceLabel?: string;
   templateCandidatePath?: string;
   homePageCandidatePath?: string;
+  publishContractPath?: string;
   pageSourceMap: PublisherPageSourceMapping[];
   assetMaterialization: PublisherAssetMaterialization[];
   artifacts: PublisherBuildArtifact[];
@@ -524,6 +539,7 @@ export interface PublisherBuildSummary {
   releaseFailures: number;
   warningCount: number;
   artifacts: PublisherBuildArtifact[];
+  publishContractPath?: string;
   pipeline?: PublisherPipelineResult;
 }
 

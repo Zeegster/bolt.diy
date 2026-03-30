@@ -23,6 +23,8 @@ export const PUBLISHER_MANIFEST_FILE = `${PUBLISHER_GENERATED_DIR}/site.webmanif
 export const PUBLISHER_ROBOTS_FILE = `${PUBLISHER_GENERATED_DIR}/robots.txt`;
 export const PUBLISHER_SITEMAP_FILE = `${PUBLISHER_GENERATED_DIR}/sitemap.xml`;
 export const PUBLISHER_PROVENANCE_FILE = `${PUBLISHER_GENERATED_DIR}/provenance.json`;
+export const PUBLISHER_PUBLISH_CONTRACT_FILE = `${PUBLISHER_GENERATED_DIR}/publish-contract.json`;
+export const PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS = 10;
 
 export function getPublisherPageFilePath(slug: string) {
   return `${PUBLISHER_PAGES_DIR}/${slug}.json`;
