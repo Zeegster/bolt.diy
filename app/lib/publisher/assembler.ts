@@ -4,8 +4,10 @@ import {
   PUBLISHER_GENERATED_DIR,
   PUBLISHER_GENERATED_JS_FILE,
   PUBLISHER_MANIFEST_FILE,
+  PUBLISHER_PUBLISH_CONTRACT_FILE,
   PUBLISHER_PROVENANCE_FILE,
   PUBLISHER_ROBOTS_FILE,
+  PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS,
   PUBLISHER_SITEMAP_FILE,
   PUBLISHER_STATE_FILE,
 } from './constants';
@@ -371,22 +373,35 @@ function buildPublishContract(
   build: PublisherBuildSummary,
   checks: CheckReport[],
   state: LoadedPublisherState,
+  deliveryStage: PublisherReleaseDeliveryStage,
+  artifactPath: string,
 ): PublisherPublishContract {
   const semantics = derivePublisherPublishSemantics(checks);
+  const releaseArtifacts = build.artifacts.filter((artifact) => artifact.path !== artifactPath);
 
   return {
     schemaVersion: '1.0.0',
     buildId: build.id,
     projectId: build.projectId,
     generatedAt: build.createdAt,
+    deliveryStage,
+    artifactPath,
+    artifact: {
+      path: artifactPath,
+      contentType: 'json',
+      schemaVersion: '1.0.0',
+      generatedAt: build.createdAt,
+    },
     canPublish: semantics.canPublish,
     publishWarnings: semantics.publishWarnings,
     publishBlockers: semantics.publishBlockers,
     sourceFingerprint: buildSourceFingerprint(state),
-    artifactFingerprint: buildArtifactFingerprint(build.artifacts),
+    artifactFingerprint: buildArtifactFingerprint(releaseArtifacts),
     rollback: {
       strategy: 'rebuild',
-      keepLastBuilds: 10,
+      keepLastBuilds: PUBLISHER_ROLLBACK_KEEP_LAST_BUILDS,
+      sourceOfTruth: ['project', 'theme', 'pages', 'references', 'checks'],
+      requiredArtifacts: [PUBLISHER_CHECKS_FILE, PUBLISHER_PROVENANCE_FILE, PUBLISHER_STATE_FILE],
     },
   };
 }
@@ -428,10 +443,9 @@ function createPipelineJob(buildId: string, stageResult: PublisherPipelineStageR
 
 function buildPublisherPipeline(
   build: PublisherBuildSummary,
-  checks: CheckReport[],
-  state: LoadedPublisherState,
   stages: PublisherPipelineStageResult[],
   deliveryStage: PublisherReleaseDeliveryStage,
+  publishContract: PublisherPublishContract,
 ): PublisherPipelineResult {
   const failedStage = stages.find((stage) => stage.status === 'failed')?.stage;
   const activeStage = failedStage ?? stages[stages.length - 1]?.stage ?? 'assemble';
@@ -444,7 +458,7 @@ function buildPublisherPipeline(
     jobs: stages.map((stage) => createPipelineJob(build.id, stage)),
     activeStage,
     failedStage,
-    publishContract: buildPublishContract(build, checks, state),
+    publishContract,
   };
 }
 
@@ -473,6 +487,7 @@ function buildPublisherSummary(
 function buildPublisherProvenance(
   state: LoadedPublisherState,
   files: Record<string, string>,
+  publishContractPath?: string,
 ): PublisherBuildProvenance {
   return {
     projectId: state.project?.id,
@@ -481,6 +496,7 @@ function buildPublisherProvenance(
     sourceLabel: state.referenceState?.sourceLabel,
     templateCandidatePath: state.referenceState?.templateCandidatePath,
     homePageCandidatePath: state.referenceState?.homePageCandidatePath,
+    publishContractPath,
     pageSourceMap: [...(state.referenceState?.pageSourceMap ?? [])].sort((left, right) =>
       left.pageId.localeCompare(right.pageId),
     ),
@@ -611,7 +627,11 @@ export function assemblePublisherProject(
   );
 
   if (state.project) {
-    files[PUBLISHER_PROVENANCE_FILE] = JSON.stringify(buildPublisherProvenance(state, files), null, 2);
+    files[PUBLISHER_PROVENANCE_FILE] = JSON.stringify(
+      buildPublisherProvenance(state, files, PUBLISHER_PUBLISH_CONTRACT_FILE),
+      null,
+      2,
+    );
   }
 
   stageResults.push(
@@ -635,7 +655,13 @@ export function assemblePublisherProject(
   );
 
   const build = buildPublisherSummary(state.project?.id, checks, files);
-  const pipeline = buildPublisherPipeline(build, checks, state, stageResults, deliveryStage);
+  build.publishContractPath = PUBLISHER_PUBLISH_CONTRACT_FILE;
+
+  const publishContract = buildPublishContract(build, checks, state, deliveryStage, PUBLISHER_PUBLISH_CONTRACT_FILE);
+  files[PUBLISHER_PUBLISH_CONTRACT_FILE] = JSON.stringify(publishContract, null, 2);
+  build.artifacts = buildArtifactsFromFiles(files);
+
+  const pipeline = buildPublisherPipeline(build, stageResults, deliveryStage, publishContract);
   build.pipeline = pipeline;
   files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project?.id, checks, context, build);
 
