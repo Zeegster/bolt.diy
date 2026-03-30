@@ -56,8 +56,8 @@
 
 - [x] **VAL-01**: Working checks support day-to-day operator review without blocking draft iteration.
 - [x] **VAL-02**: Release checks block publish when metadata completeness, canonical URLs, robots/sitemap consistency, internal links, or asset policy fail.
-- [ ] **VAL-03**: Typecheck, tests, and CI linting are part of the standard release discipline.
-- [ ] **VAL-04**: Publisher flows have integration tests covering intake, contracts, assembly, and release checks.
+- [x] **VAL-03**: Typecheck, tests, and CI linting are part of the standard release discipline.
+- [x] **VAL-04**: Publisher flows have integration tests covering intake, contracts, assembly, and release checks.
 
 ### Publish and History
 
@@ -119,8 +119,8 @@
 | AGNT-04 | Phase 5 | Pending |
 | VAL-01 | Phase 4 | Complete |
 | VAL-02 | Phase 4 | Complete |
-| VAL-03 | Phase 4 | Pending |
-| VAL-04 | Phase 4 | Pending |
+| VAL-03 | Phase 4 | Complete |
+| VAL-04 | Phase 4 | Complete |
 | PUB-01 | Phase 4 | Complete |
 | PUB-02 | Phase 4 | Complete |
 | PUB-03 | Phase 4 | Complete |
