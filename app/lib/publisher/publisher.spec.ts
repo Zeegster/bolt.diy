@@ -13,7 +13,7 @@ import { normalizePublisherBuildSummary } from './persistence';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
 import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from './prompt-context';
 import type { FileMap } from '~/lib/stores/files';
-import { PUBLISHER_PAGES_DIR, PUBLISHER_PROJECT_FILE, PUBLISHER_THEME_FILE } from './constants';
+import { PUBLISHER_PAGES_DIR, PUBLISHER_PROJECT_FILE, PUBLISHER_PUBLISH_CONTRACT_FILE, PUBLISHER_THEME_FILE } from './constants';
 import type { PublisherBlockDefinition } from '~/types/publisher';
 
 function createPublisherFiles(): FileMap {
@@ -174,8 +174,11 @@ describe('publisher workflow', () => {
     expect(result.files['/home/project/.bolt/publisher/generated/assets/css/main.css']).toContain('--color-primary');
     expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"pageSourceMap"');
     expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"artifacts"');
+    expect(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]).toContain('"schemaVersion": "1.0.0"');
+    expect(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]).toContain('"rollback"');
     expect(result.files['/home/project/.bolt/publisher/checks.json']).toContain('working-gate');
     expect(result.build.artifacts.length).toBeGreaterThan(0);
+    expect(result.build.publishContractPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
     expect(result.build.releaseFailures).toBe(0);
     expect(result.pipeline.schemaVersion).toBe('1.0.0');
     expect(result.pipeline.stageOrder).toEqual(['assemble', 'optimize', 'check', 'export']);
@@ -188,6 +191,7 @@ describe('publisher workflow', () => {
     expect(result.pipeline.jobs.map((job) => job.stage)).toEqual(['assemble', 'optimize', 'check', 'export']);
     expect(result.pipeline.publishContract.canPublish).toBe(true);
     expect(result.pipeline.publishContract.publishBlockers).toEqual([]);
+    expect(result.pipeline.publishContract.artifactPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
     expect(JSON.parse(result.files['/home/project/.bolt/publisher/state.json']).latestBuild.pipeline.jobs).toHaveLength(
       4,
     );
@@ -435,6 +439,50 @@ describe('publisher workflow', () => {
     expect(blockers.some((value) => value.startsWith('release:site-url:'))).toBe(true);
     expect(blockers.some((value) => value.includes('release-gate'))).toBe(false);
     expect(warnings.every((value) => value.startsWith('release:'))).toBe(true);
+  });
+
+  it('writes publish contract artifact aligned with pipeline metadata and rebuild strategy', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const publishContract = JSON.parse(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]) as typeof result.pipeline.publishContract;
+
+    expect(publishContract.buildId).toBe(result.build.id);
+    expect(publishContract.artifactPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
+    expect(publishContract.deliveryStage).toBe(result.pipeline.deliveryStage);
+    expect(publishContract.canPublish).toBe(result.pipeline.publishContract.canPublish);
+    expect(publishContract.publishBlockers).toEqual(result.pipeline.publishContract.publishBlockers);
+    expect(publishContract.publishWarnings).toEqual(result.pipeline.publishContract.publishWarnings);
+    expect(publishContract.rollback.strategy).toBe('rebuild');
+    expect(publishContract.rollback.keepLastBuilds).toBeGreaterThan(0);
+    expect(publishContract.rollback.sourceOfTruth).toContain('project');
+    expect(publishContract.rollback.requiredArtifacts).toContain('/home/project/.bolt/publisher/checks.json');
+  });
+
+  it('keeps publish contract semantics deterministic across rebuilds', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const first = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const second = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+
+    const normalizeContract = (value: typeof first.pipeline.publishContract) => {
+      const { buildId: _buildId, generatedAt: _generatedAt, artifact, ...rest } = value;
+
+      return {
+        ...rest,
+        artifact: artifact
+          ? {
+              ...artifact,
+              generatedAt: '<normalized>',
+            }
+          : undefined,
+      };
+    };
+
+    const firstContract = normalizeContract(JSON.parse(first.files[PUBLISHER_PUBLISH_CONTRACT_FILE]));
+    const secondContract = normalizeContract(JSON.parse(second.files[PUBLISHER_PUBLISH_CONTRACT_FILE]));
+
+    expect(firstContract).toEqual(secondContract);
+    expect(firstContract.artifactFingerprint).toBe(secondContract.artifactFingerprint);
+    expect(firstContract.sourceFingerprint).toBe(secondContract.sourceFingerprint);
   });
 
   it('builds absolute canonical URLs from project siteUrl', () => {
