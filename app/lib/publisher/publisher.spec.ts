@@ -13,7 +13,12 @@ import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
-import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from './prompt-context';
+import {
+  buildPageRegeneratePrompt,
+  buildPreviewRebuildPrompt,
+  buildRepairRegeneratePrompt,
+  buildSlotRegeneratePrompt,
+} from './prompt-context';
 import type { FileMap } from '~/lib/stores/files';
 import {
   PUBLISHER_PAGES_DIR,
@@ -806,16 +811,32 @@ describe('publisher workflow', () => {
   it('documents reserved ownership rules in prompts', () => {
     const publisherPrompt = getPublisherPrompt('/home/project');
     const pagePrompt = buildPageRegeneratePrompt('home');
+    const previewPrompt = buildPreviewRebuildPrompt('demo-site');
+    const repairPrompt = buildRepairRegeneratePrompt('metadata-completeness', 'home', 'content');
     const slotPrompt = buildSlotRegeneratePrompt('home', 'content', {
       id: 'hero',
       blockId: 'hero-centered',
       props: {},
     });
 
+    expect(publisherPrompt).toContain('Allowed agent intents: normalize, map, fill, repair.');
+    expect(publisherPrompt).toContain(
+      'Default deny writes to /home/project/.bolt/publisher/generated and /home/project/.bolt/publisher/intake unless explicitly requested by the operator.',
+    );
     expect(publisherPrompt).toContain('canonicalUrl');
     expect(publisherPrompt).toContain('schema JSON-LD');
+    expect(publisherPrompt).toContain('Never create new zones or new block IDs unless explicitly requested.');
+    expect(pagePrompt).toContain('intent: map');
+    expect(pagePrompt).toContain('targetFileScope: contract-only');
     expect(pagePrompt).toContain('Do not invent new zones');
+    expect(slotPrompt).toContain('intent: fill');
+    expect(slotPrompt).toContain('targetFileScope: contract-only');
     expect(slotPrompt).toContain('reserved metadata keys');
+    expect(repairPrompt).toContain('intent: repair');
+    expect(repairPrompt).toContain('targetFileScope: contracts-plus-checks');
+    expect(repairPrompt).toContain('repairCheck: metadata-completeness');
+    expect(previewPrompt).toContain('intent: repair');
+    expect(previewPrompt).toContain('targetFileScope: generated-rebuild-only');
   });
 
   it('derives intake review workflow state from unapplied intake sessions', () => {
