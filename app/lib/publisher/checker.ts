@@ -32,6 +32,17 @@ function countReports(reports: CheckReport[], gate: 'working' | 'release', statu
   return reports.filter((report) => report.gate === gate && report.status === status).length;
 }
 
+function isGateSummaryReport(report: CheckReport) {
+  return report.name === 'working-gate' || report.name === 'release-gate';
+}
+
+function formatPublishDiagnostic(report: CheckReport) {
+  const gate = report.gate ?? 'working';
+  const target = report.pageId ? `${report.pageId}${report.zone ? `/${report.zone}` : ''}` : 'project';
+
+  return `${gate}:${report.name}:${target} — ${report.message}`;
+}
+
 function normalizePath(path: string) {
   return path.replace(/\/+$/, '') || '/';
 }
@@ -84,6 +95,28 @@ function collectManagedAssetPublicPaths(state: LoadedPublisherState) {
   });
 
   return assetPaths;
+}
+
+export function derivePublisherPublishSemantics(checks: CheckReport[]) {
+  const workingFailures = countReports(checks, 'working', 'fail');
+  const releaseFailures = countReports(checks, 'release', 'fail');
+  const releaseWarnings = countReports(checks, 'release', 'warn');
+
+  const publishBlockers = checks
+    .filter((report) => report.status === 'fail' && !isGateSummaryReport(report))
+    .map((report) => formatPublishDiagnostic(report));
+  const publishWarnings = checks
+    .filter((report) => report.gate === 'release' && report.status === 'warn' && !isGateSummaryReport(report))
+    .map((report) => formatPublishDiagnostic(report));
+
+  return {
+    workingFailures,
+    releaseFailures,
+    releaseWarnings,
+    canPublish: workingFailures === 0 && releaseFailures === 0,
+    publishBlockers,
+    publishWarnings,
+  };
 }
 
 export function runPublisherChecks(state: LoadedPublisherState, registry: PublisherBlockRegistry): CheckReport[] {

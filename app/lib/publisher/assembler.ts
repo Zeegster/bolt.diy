@@ -10,7 +10,7 @@ import {
   PUBLISHER_STATE_FILE,
 } from './constants';
 import { publisherBlockRegistry, type PublisherBlockRegistry } from './block-registry';
-import { runPublisherChecks } from './checker';
+import { derivePublisherPublishSemantics, runPublisherChecks } from './checker';
 import { buildPageHeadMetadata, buildRobotsTxt, buildSiteManifest, buildSitemapXml } from './metadata';
 import type {
   AssetRef,
@@ -372,23 +372,16 @@ function buildPublishContract(
   checks: CheckReport[],
   state: LoadedPublisherState,
 ): PublisherPublishContract {
-  const workingFailures = checks.filter((report) => report.gate === 'working' && report.status === 'fail').length;
-  const releaseFailures = checks.filter((report) => report.gate === 'release' && report.status === 'fail').length;
-  const publishBlockers = checks
-    .filter((report) => report.status === 'fail')
-    .map((report) => `${report.name}: ${report.message}`);
-  const publishWarnings = checks
-    .filter((report) => report.status === 'warn')
-    .map((report) => `${report.name}: ${report.message}`);
+  const semantics = derivePublisherPublishSemantics(checks);
 
   return {
     schemaVersion: '1.0.0',
     buildId: build.id,
     projectId: build.projectId,
     generatedAt: build.createdAt,
-    canPublish: workingFailures === 0 && releaseFailures === 0,
-    publishWarnings,
-    publishBlockers,
+    canPublish: semantics.canPublish,
+    publishWarnings: semantics.publishWarnings,
+    publishBlockers: semantics.publishBlockers,
     sourceFingerprint: buildSourceFingerprint(state),
     artifactFingerprint: buildArtifactFingerprint(build.artifacts),
     rollback: {
