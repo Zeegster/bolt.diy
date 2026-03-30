@@ -6,7 +6,9 @@ export type ZoneType = (typeof publisherZoneTypes)[number];
 export type PublisherBlockSource = 'library' | 'agent' | 'user';
 export type PublisherCheckStatus = 'pass' | 'warn' | 'fail';
 export type PublisherAgentMode = 'publisher' | 'editor' | 'general';
-export const publisherReleasePipelineStages = ['assemble', 'optimize', 'check', 'export'] as const;
+export const publisherReleaseDeliveryStages = ['publish', 'export'] as const;
+export type PublisherReleaseDeliveryStage = (typeof publisherReleaseDeliveryStages)[number];
+export const publisherReleasePipelineStages = ['assemble', 'optimize', 'check', ...publisherReleaseDeliveryStages] as const;
 export type PublisherReleasePipelineStage = (typeof publisherReleasePipelineStages)[number];
 export type PublisherPipelineStageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export type PublisherJobStage = 'intake' | 'contract' | PublisherReleasePipelineStage;
@@ -489,7 +491,11 @@ export interface PublisherPipelineStageResult {
 }
 
 export interface PublisherPipelineResult {
+  schemaVersion: '1.0.0';
+  stageOrder: PublisherReleasePipelineStage[];
+  deliveryStage: PublisherReleaseDeliveryStage;
   stages: PublisherPipelineStageResult[];
+  // Compatibility bridge for existing Publisher Mode entry points.
   jobs: PublisherJob[];
   activeStage: PublisherReleasePipelineStage;
   failedStage?: PublisherReleasePipelineStage;
