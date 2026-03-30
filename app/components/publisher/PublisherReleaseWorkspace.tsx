@@ -96,6 +96,65 @@ function getTargetSummary(check: CheckReport) {
   return 'project';
 }
 
+interface GroupedCheckItem {
+  key: string;
+  name: string;
+  status: CheckReport['status'];
+  message: string;
+  count: number;
+  targets: string[];
+  details: string[];
+}
+
+function groupChecksByKey(checks: CheckReport[]): GroupedCheckItem[] {
+  const grouped = new Map<string, GroupedCheckItem>();
+
+  checks.forEach((check) => {
+    const key = `${check.name}:${check.status}:${check.message}`;
+    const existing = grouped.get(key);
+    const target = getTargetSummary(check);
+    const details = check.details ?? [];
+
+    if (existing) {
+      existing.count += 1;
+
+      if (!existing.targets.includes(target)) {
+        existing.targets.push(target);
+      }
+
+      details.forEach((detail) => {
+        if (!existing.details.includes(detail)) {
+          existing.details.push(detail);
+        }
+      });
+
+      return;
+    }
+
+    grouped.set(key, {
+      key,
+      name: check.name,
+      status: check.status,
+      message: check.message,
+      count: 1,
+      targets: [target],
+      details: [...details],
+    });
+  });
+
+  return [...grouped.values()].sort((left, right) => {
+    if (left.status !== right.status) {
+      return left.status === 'fail' ? -1 : right.status === 'fail' ? 1 : 0;
+    }
+
+    if (left.count !== right.count) {
+      return right.count - left.count;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+}
+
 function groupChecks(checks: CheckReport[]) {
   const order = ['metadata', 'composition', 'ownership', 'deprecated', 'output', 'content'] as const;
 
@@ -136,6 +195,10 @@ export function PublisherReleaseWorkspace({
   const latestBuild = buildHistory[0];
   const releaseChecks = checks.filter((check) => check.gate === 'release');
   const workingChecks = checks.filter((check) => check.gate !== 'release');
+  const releaseGateCheck = releaseChecks.find((check) => check.name === 'release-gate');
+  const workingGateCheck = workingChecks.find((check) => check.name === 'working-gate');
+  const diagnosticChecks = checks.filter((check) => check.name !== 'release-gate' && check.name !== 'working-gate');
+  const affectedTargets = new Set(diagnosticChecks.map((check) => getTargetSummary(check))).size;
   const releaseFailures = releaseChecks.filter((check) => check.status === 'fail');
   const releaseWarnings = releaseChecks.filter((check) => check.status === 'warn');
   const workingFailures = workingChecks.filter((check) => check.status === 'fail');
@@ -301,6 +364,29 @@ export function PublisherReleaseWorkspace({
         </div>
       ) : null}
 
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className={`rounded-lg border p-3 text-xs ${getCheckTone(releaseGateCheck?.status ?? 'warn')}`}>
+          <div className="text-[11px] uppercase tracking-[0.16em] opacity-80">Release gate</div>
+          <div className="mt-1 text-sm font-medium uppercase">{releaseGateCheck?.status ?? 'unknown'}</div>
+          <div className="mt-1 opacity-90">{releaseFailures.length} blockers</div>
+        </div>
+        <div className={`rounded-lg border p-3 text-xs ${getCheckTone(workingGateCheck?.status ?? 'warn')}`}>
+          <div className="text-[11px] uppercase tracking-[0.16em] opacity-80">Working gate</div>
+          <div className="mt-1 text-sm font-medium uppercase">{workingGateCheck?.status ?? 'unknown'}</div>
+          <div className="mt-1 opacity-90">{workingFailures.length} blockers</div>
+        </div>
+        <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3 text-xs text-bolt-elements-textSecondary">
+          <div className="text-[11px] uppercase tracking-[0.16em]">Release warnings</div>
+          <div className="mt-1 text-sm font-medium text-bolt-elements-textPrimary">{releaseWarnings.length}</div>
+          <div className="mt-1">Checks that need operator confirmation before publish.</div>
+        </div>
+        <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3 text-xs text-bolt-elements-textSecondary">
+          <div className="text-[11px] uppercase tracking-[0.16em]">Affected targets</div>
+          <div className="mt-1 text-sm font-medium text-bolt-elements-textPrimary">{affectedTargets}</div>
+          <div className="mt-1">Unique page or zone scopes touched by diagnostics.</div>
+        </div>
+      </div>
+
       {groupedPanels.length > 0 ? (
         <div className="mt-4 space-y-4">
           {groupedPanels.map((panel) => (
@@ -325,9 +411,9 @@ export function PublisherReleaseWorkspace({
                   </div>
 
                   <div className="space-y-2">
-                    {group.checks.map((check) => (
+                    {groupChecksByKey(group.checks).map((check) => (
                       <div
-                        key={`${check.name}-${check.pageId ?? 'project'}-${check.message}`}
+                        key={check.key}
                         className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -336,10 +422,15 @@ export function PublisherReleaseWorkspace({
                         </div>
                         <div className="mt-1 opacity-90">{check.message}</div>
                         <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
-                          Inspect: {getTargetSummary(check)}
+                          Inspect ({check.count}): {check.targets.join(' · ')}
                         </div>
-                        {check.details?.length ? (
-                          <div className="mt-2 opacity-90">{check.details.join(' · ')}</div>
+                        {check.details.length ? (
+                          <div className="mt-2 opacity-90">{check.details.slice(0, 4).join(' · ')}</div>
+                        ) : null}
+                        {check.details.length > 4 ? (
+                          <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
+                            +{check.details.length - 4} more detail item(s)
+                          </div>
                         ) : null}
                       </div>
                     ))}
