@@ -2,10 +2,18 @@ import type {
   CheckReport,
   IntakeSession,
   PublisherBuildSummary,
+  PublisherPipelineStageStatus,
   PublisherProjectStatus,
+  PublisherReleasePipelineStage,
   PublisherWorkflowState,
   PublisherWorkflowStep,
 } from '~/types/publisher';
+
+interface WorkflowReleaseStageContext {
+  releaseStage?: PublisherReleasePipelineStage;
+  releaseStageStatus?: PublisherPipelineStageStatus;
+  releaseFailureStage?: PublisherReleasePipelineStage;
+}
 
 export function summarizeChecks(checks: CheckReport[]) {
   return {
@@ -23,6 +31,7 @@ function createWorkflowState(
   summary: string,
   nextAction: string,
   blockingReason?: string,
+  stage?: WorkflowReleaseStageContext,
 ): PublisherWorkflowState {
   const labels: Record<PublisherWorkflowStep, string> = {
     intake: 'Intake review',
@@ -38,6 +47,42 @@ function createWorkflowState(
     summary,
     nextAction,
     blockingReason,
+    releaseStage: stage?.releaseStage,
+    releaseStageStatus: stage?.releaseStageStatus,
+    releaseFailureStage: stage?.releaseFailureStage,
+  };
+}
+
+function deriveReleaseStageFromBuild(lastBuild?: PublisherBuildSummary): WorkflowReleaseStageContext {
+  const stages = lastBuild?.pipeline?.stages ?? [];
+
+  if (stages.length === 0) {
+    return {};
+  }
+
+  const failedStage = lastBuild?.pipeline?.failedStage ?? stages.find((stage) => stage.status === 'failed')?.stage;
+
+  if (failedStage) {
+    const failedResult = stages.find((stage) => stage.stage === failedStage);
+
+    return {
+      releaseStage: failedStage,
+      releaseStageStatus: failedResult?.status ?? 'failed',
+      releaseFailureStage: failedStage,
+    };
+  }
+
+  const activeStage = lastBuild?.pipeline?.activeStage ?? stages[stages.length - 1]?.stage;
+
+  if (!activeStage) {
+    return {};
+  }
+
+  const activeResult = stages.find((stage) => stage.stage === activeStage);
+
+  return {
+    releaseStage: activeStage,
+    releaseStageStatus: activeResult?.status ?? 'completed',
   };
 }
 
@@ -81,6 +126,7 @@ export function derivePublisherWorkflowState(options: {
   const { intakeSession, checks, lastBuild } = options;
   const counts = summarizeChecks(checks);
   const status = derivePublisherProjectStatus(options);
+  const stageFromBuild = deriveReleaseStageFromBuild(lastBuild);
 
   if (status === 'published') {
     return createWorkflowState(
@@ -88,6 +134,8 @@ export function derivePublisherWorkflowState(options: {
       'published',
       'The latest publisher build is already marked as published.',
       'Review build history or start the next intake batch.',
+      undefined,
+      stageFromBuild,
     );
   }
 
@@ -101,13 +149,21 @@ export function derivePublisherWorkflowState(options: {
     );
   }
 
-  if (counts.releaseFail > 0) {
+  if (status === 'failed') {
+    const failedCount = Math.max(counts.releaseFail, lastBuild?.releaseFailures ?? 0);
+    const fallbackFailureStage: PublisherReleasePipelineStage | undefined = failedCount > 0 ? 'check' : undefined;
+
     return createWorkflowState(
       'failed',
       'release',
       'Release checks are blocking publish readiness.',
       'Inspect release blockers, rebuild preview, and re-run release validation.',
-      `${counts.releaseFail} release blocking check(s) failed.`,
+      `${failedCount} release blocking check(s) failed.`,
+      {
+        releaseStage: stageFromBuild.releaseStage ?? fallbackFailureStage,
+        releaseStageStatus: stageFromBuild.releaseStageStatus ?? (failedCount > 0 ? 'failed' : undefined),
+        releaseFailureStage: stageFromBuild.releaseFailureStage ?? fallbackFailureStage,
+      },
     );
   }
 
@@ -130,6 +186,7 @@ export function derivePublisherWorkflowState(options: {
       lastBuild.releaseFailures > 0
         ? `${lastBuild.releaseFailures} release failure(s) remain in the latest build.`
         : undefined,
+      stageFromBuild,
     );
   }
 

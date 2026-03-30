@@ -1,8 +1,11 @@
-import type {
-  CheckReport,
-  PublisherBuildSummary,
-  PublisherProjectStatus,
-  PublisherWorkflowState,
+import {
+  publisherReleasePipelineStages,
+  type CheckReport,
+  type PublisherBuildSummary,
+  type PublisherPipelineStageResult,
+  type PublisherProjectStatus,
+  type PublisherReleasePipelineStage,
+  type PublisherWorkflowState,
 } from '~/types/publisher';
 import { categorizePublisherDiagnostic, getPublisherDiagnosticLabel } from '~/lib/publisher/intake-ui';
 
@@ -24,6 +27,55 @@ function getCheckTone(status: CheckReport['status']) {
   }
 
   return 'border-red-500/20 bg-red-500/10 text-red-200';
+}
+
+function getStageTone(status: PublisherPipelineStageResult['status']) {
+  if (status === 'completed') {
+    return 'border-green-500/20 bg-green-500/10 text-green-300';
+  }
+
+  if (status === 'running' || status === 'pending') {
+    return 'border-blue-500/20 bg-blue-500/10 text-blue-200';
+  }
+
+  if (status === 'skipped') {
+    return 'border-zinc-500/20 bg-zinc-500/10 text-zinc-300';
+  }
+
+  return 'border-red-500/20 bg-red-500/10 text-red-200';
+}
+
+function formatStageLabel(stage: PublisherReleasePipelineStage) {
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
+function isReleasePipelineStage(value: string): value is PublisherReleasePipelineStage {
+  return (publisherReleasePipelineStages as readonly string[]).includes(value);
+}
+
+function derivePipelineStages(build?: PublisherBuildSummary): PublisherPipelineStageResult[] {
+  const stageOrder = [...publisherReleasePipelineStages];
+  const pipelineStages = build?.pipeline?.stages;
+
+  if (pipelineStages && pipelineStages.length > 0) {
+    return [...pipelineStages].sort(
+      (left, right) => stageOrder.indexOf(left.stage) - stageOrder.indexOf(right.stage),
+    );
+  }
+
+  const legacyJobs = build?.pipeline?.jobs ?? [];
+
+  return legacyJobs
+    .filter((job) => isReleasePipelineStage(job.stage))
+    .map((job) => ({
+      stage: job.stage,
+      status: job.status === 'idle' ? 'pending' : job.status,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      summary: job.details?.[0] ?? `${formatStageLabel(job.stage)} stage completed.`,
+      details: job.details?.slice(1) ?? [],
+    }))
+    .sort((left, right) => stageOrder.indexOf(left.stage) - stageOrder.indexOf(right.stage));
 }
 
 function getTargetSummary(check: CheckReport) {
@@ -108,6 +160,10 @@ export function PublisherReleaseWorkspace({
       checks: workingWarnings,
     },
   ].filter((panel) => panel.checks.length > 0);
+  const pipelineStages = derivePipelineStages(latestBuild);
+  const workflowStage =
+    workflow.releaseFailureStage ?? workflow.releaseStage ?? latestBuild?.pipeline?.failedStage ?? latestBuild?.pipeline?.activeStage;
+  const workflowStageResult = workflowStage ? pipelineStages.find((stage) => stage.stage === workflowStage) : undefined;
 
   return (
     <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
@@ -121,6 +177,10 @@ export function PublisherReleaseWorkspace({
           <p className="mt-1 text-xs text-bolt-elements-textSecondary">
             Next action: {workflow.nextAction}
             {workflow.blockingReason ? ` · Blocker: ${workflow.blockingReason}` : ''}
+            {workflow.releaseStage
+              ? ` · Stage: ${formatStageLabel(workflow.releaseStage)} (${workflow.releaseStageStatus ?? 'unknown'})`
+              : ''}
+            {workflow.releaseFailureStage ? ` · Failed at: ${formatStageLabel(workflow.releaseFailureStage)}` : ''}
           </p>
         </div>
         <div className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
@@ -200,6 +260,40 @@ export function PublisherReleaseWorkspace({
           Open robots.txt
         </button>
       </div>
+
+      {pipelineStages.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs uppercase tracking-[0.16em] text-bolt-elements-textSecondary">Pipeline stages</div>
+            <div className="text-[11px] text-bolt-elements-textSecondary">{pipelineStages.length} stage(s)</div>
+          </div>
+
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {pipelineStages.map((stage) => (
+              <div key={stage.stage} className={`rounded-lg border p-3 text-xs ${getStageTone(stage.status)}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{formatStageLabel(stage.stage)}</span>
+                  <span className="uppercase tracking-[0.16em]">{stage.status}</span>
+                </div>
+                <div className="mt-1 opacity-90">{stage.summary}</div>
+                {stage.blockingReason ? (
+                  <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
+                    Blocking reason: {stage.blockingReason}
+                  </div>
+                ) : null}
+                {stage.details.length > 0 ? <div className="mt-2 opacity-90">{stage.details.join(' · ')}</div> : null}
+              </div>
+            ))}
+          </div>
+
+          {workflowStageResult ? (
+            <div className="mt-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-3 py-2 text-xs text-bolt-elements-textSecondary">
+              Active handoff: {formatStageLabel(workflowStageResult.stage)} ({workflowStageResult.status})
+              {workflowStageResult.blockingReason ? ` · ${workflowStageResult.blockingReason}` : ''}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {groupedPanels.length > 0 ? (
         <div className="mt-4 space-y-4">
