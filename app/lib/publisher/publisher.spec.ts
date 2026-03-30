@@ -13,7 +13,13 @@ import { normalizePublisherBuildSummary } from './persistence';
 import { getPublisherPrompt } from '~/lib/common/prompts/publisher';
 import { buildPageRegeneratePrompt, buildSlotRegeneratePrompt } from './prompt-context';
 import type { FileMap } from '~/lib/stores/files';
-import { PUBLISHER_PAGES_DIR, PUBLISHER_PROJECT_FILE, PUBLISHER_PUBLISH_CONTRACT_FILE, PUBLISHER_THEME_FILE } from './constants';
+import {
+  PUBLISHER_PAGES_DIR,
+  PUBLISHER_PROJECT_FILE,
+  PUBLISHER_PROVENANCE_FILE,
+  PUBLISHER_PUBLISH_CONTRACT_FILE,
+  PUBLISHER_THEME_FILE,
+} from './constants';
 import type { PublisherBlockDefinition } from '~/types/publisher';
 
 function createPublisherFiles(): FileMap {
@@ -228,6 +234,57 @@ describe('publisher workflow', () => {
     expect(result.pipeline.jobs.find((job) => job.stage === 'check')?.status).toBe('failed');
     expect(result.pipeline.stages.find((stage) => stage.stage === 'export')?.status).toBe('failed');
     expect(result.pipeline.jobs.find((job) => job.stage === 'export')?.status).toBe('failed');
+  });
+
+  it('records staged execution metadata with deterministic stage-to-job linkage', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+
+    expect(result.pipeline.stages).toHaveLength(4);
+    expect(result.pipeline.stages.every((stage) => Boolean(stage.startedAt) && Boolean(stage.finishedAt))).toBe(true);
+    expect(result.pipeline.stages.map((stage) => stage.status)).toEqual(['completed', 'completed', 'completed', 'completed']);
+    expect(result.pipeline.jobs).toHaveLength(result.pipeline.stages.length);
+    expect(result.pipeline.jobs.every((job) => job.id.startsWith(`${result.build.id}:`))).toBe(true);
+    expect(result.pipeline.jobs.map((job) => job.details?.[0])).toEqual(result.pipeline.stages.map((stage) => stage.summary));
+    expect(result.build.stage).toBe('export');
+    expect(result.build.pipeline?.activeStage).toBe('export');
+  });
+
+  it('propagates check-stage failures into export diagnostics and generated publish artifacts', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+        },
+        null,
+        2,
+      ),
+    };
+
+    const state = loadPublisherState(files);
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const checkStage = result.pipeline.stages.find((stage) => stage.stage === 'check');
+    const exportStage = result.pipeline.stages.find((stage) => stage.stage === 'export');
+    const publishContractArtifact = JSON.parse(result.files[PUBLISHER_PUBLISH_CONTRACT_FILE]) as typeof result.pipeline.publishContract;
+    const provenance = JSON.parse(result.files[PUBLISHER_PROVENANCE_FILE]) as { publishContractPath?: string };
+
+    expect(checkStage?.status).toBe('failed');
+    expect(checkStage?.details.some((detail) => detail.includes('site-url'))).toBe(true);
+    expect(exportStage?.status).toBe('failed');
+    expect(exportStage?.blockingReason).toContain('check-stage failures');
+    expect(exportStage?.details).toEqual(expect.arrayContaining(checkStage?.details ?? []));
+    expect(result.pipeline.publishContract.publishBlockers.some((value) => value.startsWith('release:site-url:'))).toBe(true);
+    expect(publishContractArtifact.canPublish).toBe(false);
+    expect(publishContractArtifact.publishBlockers).toEqual(result.pipeline.publishContract.publishBlockers);
+    expect(provenance.publishContractPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
   });
 
   it('surfaces invalid page JSON as issues', () => {
