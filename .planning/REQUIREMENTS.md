@@ -13,9 +13,9 @@
 
 ### Content and Heading Integrity
 
-- [ ] **CONT-06**: Publisher pipeline preserves original textual content and heading hierarchy from intake documents unless the operator explicitly edits the approved source-of-truth fields.
-- [ ] **CONT-07**: Templates, normalizers, and generated blocks do not introduce semantic headings or primary content that are absent from the approved source documents.
-- [ ] **CONT-08**: Decorative zones remain decorative and cannot absorb core page meaning that belongs to the main content zone.
+- [x] **CONT-06**: Publisher pipeline preserves original textual content and heading hierarchy from intake documents unless the operator explicitly edits the approved source-of-truth fields.
+- [x] **CONT-07**: Templates, normalizers, and generated blocks do not introduce semantic headings or primary content that are absent from the approved source documents.
+- [x] **CONT-08**: Decorative zones remain decorative and cannot absorb core page meaning that belongs to the main content zone.
 
 ### Static-Site Rules Alignment
 
@@ -62,9 +62,9 @@
 | INTK-05 | Phase 7 | Complete |
 | INTK-06 | Phase 7 | Complete |
 | INTK-07 | Phase 7 | Complete |
-| CONT-06 | Phase 8 | Pending |
-| CONT-07 | Phase 8 | Pending |
-| CONT-08 | Phase 8 | Pending |
+| CONT-06 | Phase 8 | Complete |
+| CONT-07 | Phase 8 | Complete |
+| CONT-08 | Phase 8 | Complete |
 | STAT-01 | Phase 9 | Pending |
 | STAT-02 | Phase 9 | Pending |
 | STAT-03 | Phase 9 | Pending |
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after phase 07 verification*
+*Last updated: 2026-03-31 after phase 08 verification*
