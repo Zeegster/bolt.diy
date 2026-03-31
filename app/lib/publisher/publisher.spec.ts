@@ -1443,6 +1443,60 @@ describe('publisher workflow', () => {
     expect(prompt).toContain('intentBoundaries: keep the repair inside the existing slot and zone contract surface.');
   });
 
+  it('repair intent maps known diagnostics to constrained repair action', () => {
+    const sourceIntent = deriveRepairIntentFromCheck({
+      name: 'missing-page-title',
+      status: 'fail',
+      message: 'missing title',
+      pageId: 'home',
+      gate: 'working',
+    });
+    const templateIntent = deriveRepairIntentFromCheck({
+      name: 'template-heading-injection',
+      status: 'fail',
+      message: 'template heading',
+      pageId: 'home',
+      zone: 'beforeContent',
+      gate: 'release',
+    });
+    const runtimeIntent = deriveRepairIntentFromCheck({
+      name: 'technical-file-consistency',
+      status: 'fail',
+      message: 'missing static file',
+      pageId: 'home',
+      gate: 'release',
+    });
+
+    expect(sourceIntent).toEqual({
+      action: 'repair',
+      checkName: 'missing-page-title',
+      pageId: 'home',
+    });
+    expect(templateIntent).toEqual({
+      action: 'repair',
+      checkName: 'template-heading-injection',
+      pageId: 'home',
+      zone: 'beforeContent',
+    });
+    expect(runtimeIntent).toEqual({
+      action: 'repair',
+      checkName: 'technical-file-consistency',
+      pageId: 'home',
+    });
+  });
+
+  it('repair intent returns null for unsupported diagnostics', () => {
+    const intent = deriveRepairIntentFromCheck({
+      name: 'metadata-completeness',
+      status: 'fail',
+      message: 'unsupported for constrained repair',
+      pageId: 'home',
+      gate: 'release',
+    });
+
+    expect(intent).toBeNull();
+  });
+
   it('derives intake review workflow state from unapplied intake sessions', () => {
     const workflow = derivePublisherWorkflowState({
       intakeSession: {

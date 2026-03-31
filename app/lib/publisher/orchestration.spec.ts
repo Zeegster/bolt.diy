@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildRepairRegeneratePrompt } from './prompt-context';
 import {
   createPublisherOrchestrationEnvelope,
   parsePublisherOrchestrationAction,
@@ -56,5 +57,17 @@ describe('publisher orchestration', () => {
     expect(envelope.qualityExtensions).toEqual([
       { kind: 'lighthouse', profile: 'mobile', minScore: 0.9, optional: true },
     ]);
+  });
+
+  it('repair intent prompt encodes constrained scope and origin marker', () => {
+    const sourcePrompt = buildRepairRegeneratePrompt('missing-page-h1', 'home');
+    const templatePrompt = buildRepairRegeneratePrompt('decorative-zone-primary-content', 'home', 'beforeContent');
+    const runtimePrompt = buildRepairRegeneratePrompt('table-media-wrapper', 'home', 'content');
+
+    expect(sourcePrompt).toContain('targetFileScope: contracts-plus-checks');
+    expect(sourcePrompt).toContain('repairOrigin: source');
+    expect(templatePrompt).toContain('repairOrigin: template');
+    expect(runtimePrompt).toContain('repairOrigin: runtime');
+    expect(runtimePrompt).toContain('Repair only the failing publisher contract fields needed to resolve the named check.');
   });
 });
