@@ -317,8 +317,12 @@ function valueToText(value: unknown) {
 
 function collectPageSections(page: PageContract) {
   const sections: IntakePageSectionDraft[] = [];
+  const orderedZones: ZoneType[] = [
+    'content',
+    ...publisherZoneTypes.filter((zone): zone is ZoneType => zone !== 'content'),
+  ];
 
-  for (const zone of publisherZoneTypes) {
+  for (const zone of orderedZones) {
     const zoneContract = page.zones[zone];
 
     if (!zoneContract?.slots?.length) {

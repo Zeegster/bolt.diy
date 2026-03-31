@@ -93,6 +93,34 @@ function containsArticleMarkup(value: string) {
   return /<(p|h[1-6]|ul|ol|li|blockquote|table)\b/i.test(value);
 }
 
+function normalizeTextLength(value: string) {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim().length;
+}
+
+function collectSlotNarrativePayload(props: SlotContract['props']) {
+  return [props.html, props.content, props.body, props.text, props.sections]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function hasMeaningfulProsePayload(payloads: string[]) {
+  if (payloads.length === 0) {
+    return false;
+  }
+
+  return payloads.some((payload) => {
+    if (containsArticleMarkup(payload) && normalizeTextLength(payload) >= 40) {
+      return true;
+    }
+
+    return normalizeTextLength(payload) >= 120;
+  });
+}
+
 function collectManagedAssetPublicPaths(state: LoadedPublisherState) {
   const assetPaths = new Set<string>();
 
@@ -298,6 +326,10 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
     }
 
     const decorativeZones = ['header', ...optionalPublisherZones, 'footer'] as const;
+    const contentZoneContract = resolveEffectiveZoneContract(page, 'content', state.project.sharedShell);
+    const contentHasMeaningfulProse =
+      contentZoneContract?.slots.some((slot) => hasMeaningfulProsePayload(collectSlotNarrativePayload(slot.props))) ??
+      false;
 
     for (const zone of decorativeZones) {
       const effectiveZoneContract = resolveEffectiveZoneContract(page, zone, state.project.sharedShell);
@@ -364,6 +396,22 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
               zone,
             }),
           );
+
+          if (!contentHasMeaningfulProse) {
+            reports.push(
+              createReport({
+                name: 'decorative-zone-primary-content',
+                status: 'fail',
+                message: `Block "${block.name}" appears to own primary page meaning while content zone prose is minimal.`,
+                details: [
+                  `${page.name}/${slot.id} in ${zone} carries article-like payload.`,
+                  'Move primary prose into content zone and keep decorative zones supporting only.',
+                ],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
         }
       }
     }

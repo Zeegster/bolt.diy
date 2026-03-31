@@ -28,8 +28,10 @@ import {
   saveIntakeSession,
 } from './intake-session';
 import { buildImportedBundleAdapter } from './intake-adapter';
-import { deriveBatchNormalizeReviewState } from './intake-ui';
+import { createIntakePageDraft, deriveBatchNormalizeReviewState } from './intake-ui';
 import { deriveCanonicalIntakeLifecycleState } from './status';
+import { runPublisherChecks } from './checker';
+import { publisherBlockRegistry } from './block-registry';
 
 function createHtmlDocument(html: string) {
   return new JSDOM(html).window.document;
@@ -933,6 +935,194 @@ Paragraph only.`,
 
     expect(html).not.toContain('<h1>');
     expect(html).toContain('<p>Paragraph only.</p>');
+  });
+
+  it('prioritizes content zone sections in intake draft extraction', () => {
+    const page = {
+      id: 'zone-order',
+      slug: 'zone-order',
+      name: 'Zone Order',
+      path: '/zone-order/',
+      usesProjectShell: true,
+      zones: {
+        header: {
+          enabled: true,
+          slots: [
+            {
+              id: 'header-slot',
+              blockId: 'site-header-basic',
+              props: { brandName: 'Brand', primaryLinkLabel: 'Home', primaryLinkHref: '/' },
+            },
+          ],
+        },
+        content: {
+          enabled: true,
+          slots: [
+            {
+              id: 'content-slot',
+              blockId: 'content-prose',
+              props: { sectionTitle: 'Body', html: '<p>Main article content.</p>' },
+            },
+          ],
+        },
+        sidebar: {
+          enabled: true,
+          slots: [{ id: 'sidebar-slot', blockId: 'sidebar-links', props: { title: 'Links' } }],
+        },
+      },
+      seo: {
+        title: 'Zone Order',
+        description: 'Zone extraction order',
+        schemaType: 'WebPage',
+        robots: 'index,follow',
+      },
+    };
+
+    const draft = createIntakePageDraft(page as any);
+
+    expect(draft.sections[0]?.sourceZone).toBe('content');
+    expect(draft.sections[0]?.content).toContain('<p>Main article content.</p>');
+  });
+
+  it('fails when decorative zone carries primary content while content is minimal', () => {
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const session = createIntakeSession({
+      id: 'session-zone-ownership-fail',
+      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      importKind: 'html',
+      scenario: 'template-plus-documents',
+      activeContentFamily: 'html',
+      projectName: 'Spinaura Casino',
+      sourceManifest: manifest,
+      pages: scanIntakeSourceTree(hybridSources, {
+        importKind: 'html',
+        htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+      }).pageCandidates,
+      shellCandidates: ['_layouts/header.html', '_layouts/footer.html'],
+      templateCandidatePath: 'index.html',
+      homePageCandidatePath: 'pages/index.html',
+      warnings: [],
+      referenceSourceFamily: 'document',
+    });
+    const applied = buildPublisherContractsFromIntakeSession(session);
+    const home = applied.pages.find((page) => page.id === 'home');
+
+    if (!home) {
+      throw new Error('Missing home page fixture');
+    }
+
+    home.zones.beforeContent = {
+      enabled: true,
+      slots: [
+        {
+          id: 'decorative-primary',
+          blockId: 'before-content-band',
+          props: {
+            eyebrow: 'Notice',
+            message: 'Summary',
+            html: '<p>This decorative slot now holds the full primary article payload.</p><p>Extra paragraph.</p>',
+          },
+        },
+      ],
+    };
+    home.zones.content = {
+      enabled: true,
+      slots: [
+        {
+          id: 'content-minimal',
+          blockId: 'content-prose',
+          props: {
+            sectionTitle: 'Body',
+            html: '<p>Short.</p>',
+          },
+        },
+      ],
+    };
+
+    const checks = runPublisherChecks(
+      {
+        project: applied.project,
+        theme: applied.theme,
+        pages: applied.pages,
+        checks: [],
+        issues: [],
+        availableFilePaths: Object.keys(applied.files),
+      },
+      publisherBlockRegistry,
+    );
+
+    expect(checks.some((check) => check.name === 'decorative-zone-primary-content' && check.status === 'fail')).toBe(
+      true,
+    );
+  });
+
+  it('passes decorative-zone primary-content check when content zone owns primary prose', () => {
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const session = createIntakeSession({
+      id: 'session-zone-ownership-pass',
+      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      importKind: 'html',
+      scenario: 'template-plus-documents',
+      activeContentFamily: 'html',
+      projectName: 'Spinaura Casino',
+      sourceManifest: manifest,
+      pages: scanIntakeSourceTree(hybridSources, {
+        importKind: 'html',
+        htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+      }).pageCandidates,
+      shellCandidates: ['_layouts/header.html', '_layouts/footer.html'],
+      templateCandidatePath: 'index.html',
+      homePageCandidatePath: 'pages/index.html',
+      warnings: [],
+      referenceSourceFamily: 'document',
+    });
+    const applied = buildPublisherContractsFromIntakeSession(session);
+    const home = applied.pages.find((page) => page.id === 'home');
+
+    if (!home) {
+      throw new Error('Missing home page fixture');
+    }
+
+    home.zones.beforeContent = {
+      enabled: true,
+      slots: [
+        {
+          id: 'decorative-supporting',
+          blockId: 'before-content-band',
+          props: {
+            eyebrow: 'Notice',
+            message: 'Supporting note',
+          },
+        },
+      ],
+    };
+    home.zones.content = {
+      enabled: true,
+      slots: [
+        {
+          id: 'content-primary',
+          blockId: 'content-prose',
+          props: {
+            sectionTitle: 'Body',
+            html: '<p>This is the primary article prose with meaningful depth and multiple clauses for ownership.</p>',
+          },
+        },
+      ],
+    };
+
+    const checks = runPublisherChecks(
+      {
+        project: applied.project,
+        theme: applied.theme,
+        pages: applied.pages,
+        checks: [],
+        issues: [],
+        availableFilePaths: Object.keys(applied.files),
+      },
+      publisherBlockRegistry,
+    );
+
+    expect(checks.some((check) => check.name === 'decorative-zone-primary-content')).toBe(false);
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {
