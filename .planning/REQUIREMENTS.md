@@ -79,6 +79,32 @@
 - Mapped to phases: 14
 - Unmapped: 0
 
+## v1.2 Requirements
+
+### Publisher Workspace Layout Shell
+
+- [x] **PUBUI-01**: Publisher mode uses a fixed viewport shell where page-level scroll is disabled and only designated panels scroll.
+- [x] **PUBUI-02**: Chat mode switches stay pinned above chat content and remain visible during panel scroll.
+- [x] **PUBUI-03**: Onboarding/help context is consistently rendered in the right panel without collapsing main task surfaces.
+
+### Publisher Workspace IA
+
+- [x] **PUBIA-01**: Publisher workspace top-level information architecture is split into `Основное`, `Дизайн`, and `SEO` sections.
+- [x] **PUBIA-02**: `Intake Source` is represented as a dedicated panel with clear entry and status visibility from the workspace.
+- [x] **PUBIA-03**: Main operator task surface remains focused (no overloaded central content competing with side context).
+
+### Form Primitives and Consistency
+
+- [x] **PUBFORM-01**: `ImageAssetInput` is a reusable typed component used by publisher forms that manage image assets.
+- [x] **PUBFORM-02**: `TagInput` is a reusable typed component used by publisher forms that manage tags/keywords.
+- [x] **PUBFORM-03**: Publisher forms use unified validation, error messaging, and interaction states across sections.
+
+### Visual Quality and Accessibility
+
+- [x] **PUBQA-01**: Phase completion includes desktop/tablet/mobile screenshots with scroll states for the touched surfaces.
+- [x] **PUBQA-02**: Publisher UI changes introduce no React runtime or hook errors.
+- [x] **PUBQA-03**: `pnpm typecheck && pnpm lint` pass for milestone changes.
+
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after phase 10 verification*
+*Last updated: 2026-03-31 for milestone v1.2 completion*

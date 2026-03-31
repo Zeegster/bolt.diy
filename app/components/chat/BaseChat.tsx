@@ -767,8 +767,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
+        <div className="flex h-full w-full flex-col overflow-hidden lg:flex-row">
+          <div
+            className={classNames(
+              styles.Chat,
+              'flex h-full min-h-0 flex-grow flex-col overflow-hidden lg:min-w-[var(--chat-min-width)]',
+            )}
+          >
             {!chatStarted && workspaceMode === 'default' && (
               <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
@@ -793,14 +798,28 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </p>
               </div>
             )}
-            {!chatStarted ? (
-              <div className="mt-4 mb-2 flex justify-center px-4">
-                <div className="inline-flex items-center gap-1 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1">
+            <div
+              className={classNames('z-10 mt-4 mb-2 flex justify-center px-4', {
+                'sticky top-2': chatStarted || publisherWorkspaceReady,
+              })}
+            >
+              <div className="rounded-full bg-bolt-elements-background-depth-2/90 p-1">
+                <div
+                  className="inline-flex items-center gap-1 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1"
+                  role="tablist"
+                  aria-label="Workspace mode selector"
+                >
                   {(['default', 'publisher'] as WorkspaceMode[]).map((mode) => (
                     <button
                       key={mode}
                       type="button"
+                      role="tab"
                       onClick={() => onWorkspaceModeChange?.(mode)}
+                      aria-selected={workspaceMode === mode}
+                      aria-controls={mode === 'default' ? 'workspace-panel-default' : 'workspace-panel-publisher'}
+                      aria-label={
+                        mode === 'default' ? 'Switch to default workspace mode' : 'Switch to publisher workspace mode'
+                      }
                       className={classNames(
                         'rounded-full px-3 py-1.5 text-sm transition-colors',
                         workspaceMode === mode
@@ -813,13 +832,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   ))}
                 </div>
               </div>
-            ) : null}
+            </div>
             <StickToBottom
               className={classNames('pt-6 px-2 sm:px-6 relative', {
                 'h-full flex flex-col modern-scrollbar': chatStarted || publisherWorkspaceReady,
               })}
               resize="smooth"
               initial="smooth"
+              id={workspaceMode === 'default' ? 'workspace-panel-default' : 'workspace-panel-publisher'}
             >
               <StickToBottom.Content className="flex flex-col gap-4">
                 <ClientOnly>
@@ -895,15 +915,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         gradientUnits="userSpaceOnUse"
                         gradientTransform="rotate(-45)"
                       >
-                        <stop offset="0%" stopColor="#b44aff" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="#b44aff" stopOpacity="0%"></stop>
+                        <stop offset="0%" stopColor="var(--bolt-elements-item-contentAccent)" stopOpacity="0%"></stop>
+                        <stop offset="40%" stopColor="var(--bolt-elements-item-contentAccent)" stopOpacity="80%"></stop>
+                        <stop offset="50%" stopColor="var(--bolt-elements-item-contentAccent)" stopOpacity="80%"></stop>
+                        <stop offset="100%" stopColor="var(--bolt-elements-item-contentAccent)" stopOpacity="0%"></stop>
                       </linearGradient>
                       <linearGradient id="shine-gradient">
                         <stop offset="0%" stopColor="white" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#ffffff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#ffffff" stopOpacity="80%"></stop>
+                        <stop offset="40%" stopColor="var(--bolt-elements-textPrimary)" stopOpacity="80%"></stop>
+                        <stop offset="50%" stopColor="var(--bolt-elements-textPrimary)" stopOpacity="80%"></stop>
                         <stop offset="100%" stopColor="white" stopOpacity="0%"></stop>
                       </linearGradient>
                     </defs>
@@ -1052,11 +1072,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       )}
                       onDragEnter={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.border = '2px solid #1488fc';
+                        e.currentTarget.style.border = '2px solid var(--bolt-elements-focus)';
                       }}
                       onDragOver={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.border = '2px solid #1488fc';
+                        e.currentTarget.style.border = '2px solid var(--bolt-elements-focus)';
                       }}
                       onDragLeave={(e) => {
                         e.preventDefault();
@@ -1216,10 +1236,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="mx-auto mt-4 mb-6 w-full max-w-[1280px] px-4 lg:px-8">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
                   <div />
-                  <PublisherIntakeOnboarding
-                    busy={publisherOnboardingBusy}
-                    onSubmit={(payload) => onPublisherOnboardingSubmit?.(payload)}
-                  />
+                  <div className="max-h-[calc(100vh-var(--header-height)-8rem)] overflow-y-auto lg:sticky lg:top-4">
+                    <PublisherIntakeOnboarding
+                      busy={publisherOnboardingBusy}
+                      onSubmit={(payload) => onPublisherOnboardingSubmit?.(payload)}
+                    />
+                  </div>
                 </div>
               </div>
             ) : null}

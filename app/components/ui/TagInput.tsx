@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { classNames } from '~/utils/classNames';
 
 interface TagInputProps {
+  id?: string;
   label?: string;
   placeholder?: string;
   options: string[];
@@ -9,6 +10,10 @@ interface TagInputProps {
   value: string | string[];
   onChange: (next: string | string[]) => void;
   disabled?: boolean;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  ariaDescribedBy?: string;
 }
 
 function normalizeToken(value: string) {
@@ -20,6 +25,7 @@ function normalizeOptions(options: string[]) {
 }
 
 export function TagInput({
+  id,
   label,
   placeholder = 'Type to search…',
   options,
@@ -27,7 +33,16 @@ export function TagInput({
   value,
   onChange,
   disabled = false,
+  required = false,
+  hint,
+  error,
+  ariaDescribedBy,
 }: TagInputProps) {
+  const fallbackId = useId();
+  const inputId = id ?? `tag-input-${fallbackId}`;
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  const errorId = error ? `${inputId}-error` : undefined;
+  const describedBy = [ariaDescribedBy, hintId, errorId].filter(Boolean).join(' ') || undefined;
   const [query, setQuery] = useState('');
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options]);
   const selectedValues = useMemo(() => {
@@ -85,9 +100,19 @@ export function TagInput({
 
   return (
     <div className="flex flex-col gap-2">
-      {label ? <span className="text-sm text-bolt-elements-textPrimary">{label}</span> : null}
+      {label ? (
+        <label htmlFor={inputId} className="text-sm text-bolt-elements-textPrimary">
+          {label}
+          {required ? ' *' : ''}
+        </label>
+      ) : null}
 
-      <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-2">
+      <div
+        className={classNames(
+          'rounded-lg border bg-bolt-elements-background-depth-2 p-2',
+          error ? 'border-red-500/40' : 'border-bolt-elements-borderColor',
+        )}
+      >
         <div className="flex flex-wrap items-center gap-2">
           {selectedValues.map((item) => (
             <span
@@ -107,6 +132,7 @@ export function TagInput({
           ))}
 
           <input
+            id={inputId}
             value={query}
             disabled={disabled}
             onChange={(event) => setQuery(event.target.value)}
@@ -118,6 +144,8 @@ export function TagInput({
             }}
             className="min-w-[140px] flex-1 bg-transparent px-1 py-1 text-sm outline-none"
             placeholder={placeholder}
+            aria-invalid={Boolean(error)}
+            aria-describedby={describedBy}
           />
         </div>
 
@@ -142,6 +170,17 @@ export function TagInput({
           </div>
         ) : null}
       </div>
+
+      {hint ? (
+        <span id={hintId} className="text-xs text-bolt-elements-textSecondary">
+          {hint}
+        </span>
+      ) : null}
+      {error ? (
+        <span id={errorId} className="text-xs text-red-300">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

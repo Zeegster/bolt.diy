@@ -29,6 +29,26 @@ import {
   type IntakePageDraft,
 } from '~/lib/publisher/intake-ui';
 
+type PublisherWorkspaceSection = 'core' | 'design' | 'seo';
+
+const WORKSPACE_SECTIONS: Array<{ id: PublisherWorkspaceSection; label: string; summary: string }> = [
+  {
+    id: 'core',
+    label: 'Основное',
+    summary: 'Контракт страницы, порядок секций и быстрый переход source → contract → output.',
+  },
+  {
+    id: 'design',
+    label: 'Дизайн',
+    summary: 'Безопасное редактирование block props и контроль ограничений композиции по зонам.',
+  },
+  {
+    id: 'seo',
+    label: 'SEO',
+    summary: 'Метаданные страницы и диагностика качества, влияющая на релизные проверки.',
+  },
+];
+
 interface PublisherIntakeWorkspaceProps {
   project?: SiteProjectContract;
   siteSettings?: PublisherSiteSettings;
@@ -138,6 +158,8 @@ export function PublisherIntakeWorkspace({
   onRunOrchestrationAction,
   busySettings,
 }: PublisherIntakeWorkspaceProps) {
+  const [activeSection, setActiveSection] = useState<PublisherWorkspaceSection>('core');
+  const [isSourcePaneVisible, setIsSourcePaneVisible] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, IntakePageDraft>>(() =>
     createDraftMap(pages, sourceContentByPath),
   );
@@ -177,6 +199,10 @@ export function PublisherIntakeWorkspace({
     );
   }, [markdownSources, referenceState?.sourceFiles, sourceContentByPath]);
   const checkCounts = useMemo(() => getCheckCounts(checks), [checks]);
+  const selectedSectionMeta =
+    WORKSPACE_SECTIONS.find((section) => section.id === activeSection) ?? WORKSPACE_SECTIONS[0];
+  const activeSourcePath = selectedDraft?.sourcePath ?? sourceReferences[0]?.sourcePath;
+  const hasIntakeSource = Boolean(activeSourcePath || selectedSourceContent.trim());
   const selectedBlockEditStates = useMemo(() => {
     if (!selectedPage) {
       return [];
@@ -195,7 +221,7 @@ export function PublisherIntakeWorkspace({
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
-      <div className="flex h-full flex-col gap-4 p-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-300">
@@ -268,8 +294,58 @@ export function PublisherIntakeWorkspace({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_420px]">
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+        <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Workspace IA</h3>
+              <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                Переключайте операционный фокус без потери выбранной страницы и драфта.
+              </p>
+            </div>
+            <div className="rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-bolt-elements-textSecondary">
+              Active: {selectedSectionMeta.label}
+            </div>
+          </div>
+
+          <div
+            className="mt-3 flex flex-wrap items-center gap-2"
+            role="tablist"
+            aria-label="Publisher workspace sections"
+          >
+            {WORKSPACE_SECTIONS.map((section) => {
+              const isActive = activeSection === section.id;
+
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`publisher-workspace-${section.id}`}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`rounded-full border px-3 py-1.5 text-xs uppercase tracking-[0.16em] transition-colors ${
+                    isActive
+                      ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                      : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                  }`}
+                >
+                  {section.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs text-bolt-elements-textSecondary">
+            {selectedSectionMeta.summary}
+          </div>
+        </div>
+
+        <div
+          className={`grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden ${
+            isSourcePaneVisible ? 'xl:grid-cols-[340px_minmax(0,1fr)_420px]' : 'xl:grid-cols-[340px_minmax(0,1fr)]'
+          }`}
+        >
+          <div className="modern-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -347,6 +423,48 @@ export function PublisherIntakeWorkspace({
               </div>
             </div>
 
+            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-bolt-elements-textPrimary">Intake Source</h4>
+                  <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                    Явный источник intake для текущей страницы с наблюдаемым состоянием панели.
+                  </p>
+                </div>
+                <span
+                  aria-live="polite"
+                  className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
+                    hasIntakeSource
+                      ? 'border-green-500/20 bg-green-500/10 text-green-300'
+                      : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+                  }`}
+                >
+                  {hasIntakeSource ? 'connected' : 'empty'}
+                </span>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs text-bolt-elements-textSecondary">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Panel state</span>
+                  <span className="font-medium text-bolt-elements-textPrimary">
+                    {isSourcePaneVisible ? 'Visible' : 'Hidden'}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  {activeSourcePath ? `Active source: ${activeSourcePath}` : 'No source selected yet.'}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSourcePaneVisible((current) => !current)}
+                aria-expanded={isSourcePaneVisible}
+                className="mt-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3"
+              >
+                {isSourcePaneVisible ? 'Hide Intake Source panel' : 'Show Intake Source panel'}
+              </button>
+            </div>
+
             {siteSettings ? (
               <PublisherSiteSettingsEditor
                 title="Site settings"
@@ -413,8 +531,8 @@ export function PublisherIntakeWorkspace({
             />
           </div>
 
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
-            {selectedPage && selectedDraft ? (
+          <div className="modern-scrollbar flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+            {activeSection === 'core' && selectedPage && selectedDraft ? (
               <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -466,6 +584,48 @@ export function PublisherIntakeWorkspace({
                       Inspect generated HTML for `{selectedPage.path}`
                     </div>
                   </button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeSection === 'design' ? (
+              <div
+                id="publisher-workspace-design"
+                className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4"
+              >
+                <h4 className="text-sm font-semibold text-bolt-elements-textPrimary">Design Operator Surface</h4>
+                <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                  Работа с безопасными block props и слотами без выхода из publisher-контракта.
+                </p>
+              </div>
+            ) : null}
+
+            {activeSection === 'seo' ? (
+              <div
+                id="publisher-workspace-seo"
+                className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4"
+              >
+                <h4 className="text-sm font-semibold text-bolt-elements-textPrimary">SEO Operator Surface</h4>
+                <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                  Проверяйте title/description/H1 и quality diagnostics перед release readiness.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs">
+                    <div className="text-bolt-elements-textSecondary">Title</div>
+                    <div className="mt-1 truncate text-bolt-elements-textPrimary">
+                      {selectedDraft?.title || 'Not set'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs">
+                    <div className="text-bolt-elements-textSecondary">Description</div>
+                    <div className="mt-1 truncate text-bolt-elements-textPrimary">
+                      {selectedDraft?.description || 'Not set'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs">
+                    <div className="text-bolt-elements-textSecondary">H1</div>
+                    <div className="mt-1 truncate text-bolt-elements-textPrimary">{selectedDraft?.h1 || 'Not set'}</div>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -524,7 +684,7 @@ export function PublisherIntakeWorkspace({
               onNextPage={onNextPage}
             />
 
-            {selectedBlockEditStates.length > 0 ? (
+            {activeSection === 'design' && selectedBlockEditStates.length > 0 ? (
               <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -634,17 +794,19 @@ export function PublisherIntakeWorkspace({
             ) : null}
           </div>
 
-          <div className="min-h-0 overflow-y-auto pr-1">
-            <IntakeSourcePane
-              title="Source pane"
-              sourcePath={selectedDraft?.sourcePath}
-              sourceKind={selectedDraft?.sourceKind}
-              sourceLabel={selectedDraft?.sourceLabel ?? selectedDraft?.name}
-              rawContent={selectedSourceContent}
-              sourceReferences={sourceReferences}
-              notes={selectedDraft?.warnings}
-            />
-          </div>
+          {isSourcePaneVisible ? (
+            <div className="modern-scrollbar min-h-0 overflow-y-auto pr-1" id="publisher-workspace-core">
+              <IntakeSourcePane
+                title="Intake Source panel"
+                sourcePath={selectedDraft?.sourcePath}
+                sourceKind={selectedDraft?.sourceKind}
+                sourceLabel={selectedDraft?.sourceLabel ?? selectedDraft?.name}
+                rawContent={selectedSourceContent}
+                sourceReferences={sourceReferences}
+                notes={selectedDraft?.warnings}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

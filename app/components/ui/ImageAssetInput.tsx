@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface ImageAssetInputProps {
+  id?: string;
   label: string;
   accept: string;
   shape?: 'square' | 'landscape';
@@ -10,6 +11,9 @@ interface ImageAssetInputProps {
   onChange: (file?: File) => void;
   onClear?: () => void;
   disabled?: boolean;
+  required?: boolean;
+  hint?: string;
+  error?: string;
 }
 
 function getShapeClasses(shape: ImageAssetInputProps['shape']) {
@@ -17,6 +21,7 @@ function getShapeClasses(shape: ImageAssetInputProps['shape']) {
 }
 
 export function ImageAssetInput({
+  id,
   label,
   accept,
   shape = 'square',
@@ -26,7 +31,14 @@ export function ImageAssetInput({
   onChange,
   onClear,
   disabled = false,
+  required = false,
+  hint,
+  error,
 }: ImageAssetInputProps) {
+  const inputId = id ?? `image-input-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  const errorId = error ? `${inputId}-error` : undefined;
+  const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   const inputRef = useRef<HTMLInputElement>(null);
   const [isHover, setIsHover] = useState(false);
   const [objectUrl, setObjectUrl] = useState<string>();
@@ -43,9 +55,12 @@ export function ImageAssetInput({
 
   return (
     <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
-      <div className="mb-2 text-sm font-medium text-bolt-elements-textPrimary">{label}</div>
+      <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-bolt-elements-textPrimary">
+        {label}
+        {required ? ' *' : ''}
+      </label>
       <div
-        className={`group relative overflow-hidden rounded-lg border border-bolt-elements-borderColor bg-black/20 ${getShapeClasses(shape)}`}
+        className={`group relative overflow-hidden rounded-lg border ${error ? 'border-red-500/40' : 'border-bolt-elements-borderColor'} bg-black/20 ${getShapeClasses(shape)}`}
         onMouseEnter={() => setIsHover(true)}
         onMouseLeave={() => setIsHover(false)}
       >
@@ -89,10 +104,13 @@ export function ImageAssetInput({
       </div>
 
       <input
+        id={inputId}
         ref={inputRef}
         type="file"
         accept={accept}
         className="hidden"
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedBy}
         onChange={(event) => {
           const file = event.target.files?.[0];
 
@@ -112,6 +130,16 @@ export function ImageAssetInput({
       />
 
       <div className="mt-2 truncate text-xs text-bolt-elements-textSecondary">{valueLabel ?? 'Not set yet'}</div>
+      {hint ? (
+        <div id={hintId} className="mt-1 text-xs text-bolt-elements-textSecondary">
+          {hint}
+        </div>
+      ) : null}
+      {error ? (
+        <div id={errorId} className="mt-1 text-xs text-red-300">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }

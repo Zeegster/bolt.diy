@@ -8,6 +8,13 @@ interface AssetDraftState {
   nextFile?: File;
 }
 
+interface SettingsFieldErrors {
+  name?: string;
+  domain?: string;
+  defaultLanguage?: string;
+  languages?: string;
+}
+
 export interface PublisherSiteSettingsSubmitPayload {
   settings: PublisherSiteSettings;
   assets: {
@@ -43,6 +50,14 @@ function normalizeLanguageEntries(defaultLanguage: string, multilingual: boolean
   return multilingual ? [...next] : [normalizedDefault];
 }
 
+function isValidDomain(domain: string) {
+  if (!domain) {
+    return true;
+  }
+
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain);
+}
+
 export function PublisherSiteSettingsEditor({
   title,
   description,
@@ -65,6 +80,7 @@ export function PublisherSiteSettingsEditor({
   const [logo, setLogo] = useState<AssetDraftState>({ current: initialSettings?.logo });
   const [markdownFiles, setMarkdownFiles] = useState<File[]>([]);
   const [error, setError] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
 
   useEffect(() => {
     setName(initialSettings?.name ?? '');
@@ -75,6 +91,7 @@ export function PublisherSiteSettingsEditor({
     setFavicon({ current: initialSettings?.favicon });
     setMetaImage({ current: initialSettings?.metaImage });
     setLogo({ current: initialSettings?.logo });
+    setFieldErrors({});
   }, [
     initialSettings?.defaultLanguage,
     initialSettings?.domain,
@@ -95,20 +112,31 @@ export function PublisherSiteSettingsEditor({
     event.preventDefault();
     setError(undefined);
 
+    const nextFieldErrors: SettingsFieldErrors = {};
+
     if (!name.trim()) {
-      setError('Site name is required.');
-      return;
+      nextFieldErrors.name = 'Site name is required.';
     }
 
     if (!defaultLanguage.trim()) {
-      setError('Default language is required.');
-      return;
+      nextFieldErrors.defaultLanguage = 'Default language is required.';
+    }
+
+    if (domain.trim() && !isValidDomain(domain.trim())) {
+      nextFieldErrors.domain = 'Domain must be a valid host name, for example: example.com.';
     }
 
     if (multilingual && normalizedLanguages.length < 2) {
-      setError('Multilingual mode requires at least two language codes.');
+      nextFieldErrors.languages = 'Multilingual mode requires at least two language codes.';
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+
       return;
     }
+
+    setFieldErrors({});
 
     if (mode === 'onboarding' && markdownFiles.length === 0) {
       setError('Upload at least one markdown document to bootstrap the site.');
@@ -155,7 +183,14 @@ export function PublisherSiteSettingsEditor({
             onChange={(event) => setName(event.target.value)}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="Atlas Studio"
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={fieldErrors.name ? 'publisher-settings-name-error' : undefined}
           />
+          {fieldErrors.name ? (
+            <span id="publisher-settings-name-error" className="text-xs text-red-300">
+              {fieldErrors.name}
+            </span>
+          ) : null}
         </label>
 
         <label className="flex flex-col gap-2 text-sm">
@@ -165,16 +200,27 @@ export function PublisherSiteSettingsEditor({
             onChange={(event) => setDomain(event.target.value)}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="example.com"
+            aria-invalid={Boolean(fieldErrors.domain)}
+            aria-describedby={fieldErrors.domain ? 'publisher-settings-domain-error' : undefined}
           />
+          {fieldErrors.domain ? (
+            <span id="publisher-settings-domain-error" className="text-xs text-red-300">
+              {fieldErrors.domain}
+            </span>
+          ) : null}
         </label>
 
         <TagInput
+          id="publisher-settings-default-language"
           label="Default language"
           mode="single"
           options={LANGUAGE_OPTIONS}
           value={defaultLanguage}
           onChange={(next) => setDefaultLanguage(typeof next === 'string' ? next : next[0] || 'en')}
           placeholder="Search language code"
+          required
+          hint="Use ISO-like short code (for example: en, de, fr)."
+          error={fieldErrors.defaultLanguage}
         />
 
         <label className="flex items-center gap-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-sm">
@@ -184,41 +230,47 @@ export function PublisherSiteSettingsEditor({
 
         <div className="xl:col-span-2">
           <TagInput
+            id="publisher-settings-languages"
             label="Languages list"
             mode="multiple"
             options={LANGUAGE_OPTIONS}
             value={languagesInput}
             onChange={(next) => setLanguagesInput(Array.isArray(next) ? next : next ? [next] : [])}
             placeholder="Search or type language code"
+            hint="Default language is always included."
+            error={fieldErrors.languages}
           />
-          <span className="mt-1 block text-xs text-bolt-elements-textSecondary">
-            Default language is always included.
-          </span>
         </div>
 
         <IntakeAssetField
+          id="publisher-settings-favicon"
           label="Favicon"
           accept="image/*,.ico,.png,.svg"
           currentAsset={favicon.current}
           selectedFile={favicon.nextFile}
           shape="square"
           onFileChange={(file) => setFavicon((current) => ({ ...current, nextFile: file }))}
+          helperText="Used in browser tabs and bookmark previews."
         />
         <IntakeAssetField
+          id="publisher-settings-meta-image"
           label="Meta image"
           accept="image/*"
           currentAsset={metaImage.current}
           selectedFile={metaImage.nextFile}
           shape="landscape"
           onFileChange={(file) => setMetaImage((current) => ({ ...current, nextFile: file }))}
+          helperText="Default social share image for pages without overrides."
         />
         <IntakeAssetField
+          id="publisher-settings-logo"
           label="Logo"
           accept="image/*,.svg"
           currentAsset={logo.current}
           selectedFile={logo.nextFile}
           shape="square"
           onFileChange={(file) => setLogo((current) => ({ ...current, nextFile: file }))}
+          helperText="Prefer transparent SVG/PNG for best contrast in UI shells."
         />
 
         {mode === 'onboarding' ? (
