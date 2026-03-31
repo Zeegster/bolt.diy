@@ -589,6 +589,102 @@ describe('publisher workflow', () => {
     expect(html).toContain('decoding="async"');
   });
 
+  it('mobile readability css includes table and rich media rules', () => {
+    const result = assemblePublisherProject(loadPublisherState(createPublisherFiles()), publisherBlockRegistry, {
+      mode: 'publisher',
+      currentPage: 'home',
+    });
+    const css = result.files['/home/project/.bolt/publisher/generated/assets/css/main.css'];
+
+    expect(css).toContain('.publisher-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }');
+    expect(css).toContain('.publisher-table { width: 100%; border-collapse: collapse; min-width: 640px; }');
+    expect(css).toContain('.publisher-rich-media { max-width: 100%; height: auto; display: block; }');
+  });
+
+  it('mobile readability release checks fail unnormalized rich table and media payloads', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'main',
+                  blockId: 'content-prose',
+                  props: {
+                    sectionTitle: 'Body',
+                    html: '<table><tr><td>Cell</td></tr></table><p><img src="/assets/image.png" alt="Demo" /></p>',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+    const wrapperCheck = checks.find((check) => check.name === 'table-media-wrapper');
+
+    expect(wrapperCheck?.status).toBe('fail');
+    expect(wrapperCheck?.gate).toBe('release');
+  });
+
+  it('mobile readability release checks pass when rich table and media payloads are normalized', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'main',
+                  blockId: 'content-prose',
+                  props: {
+                    sectionTitle: 'Body',
+                    html: '<div class="publisher-table-scroll" data-contract="table-scroll"><table class="publisher-table"><tr><td>Cell</td></tr></table></div><p><img class="publisher-rich-media" src="/assets/image.png" alt="Demo" loading="lazy" decoding="async" /></p>',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+
+    expect(checks.some((check) => check.name === 'table-media-wrapper' && check.status === 'fail')).toBe(false);
+  });
+
   it('blocks publish contract when release checks fail', () => {
     const files = createPublisherFiles();
     files[PUBLISHER_PROJECT_FILE] = {
