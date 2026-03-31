@@ -35,6 +35,7 @@ import type {
   ZoneType,
 } from '~/types/publisher';
 import { normalizeTokens, tokensToCssVariables } from './token-engine';
+import { STATIC_SHELL_LINKS } from './static-site-contract';
 
 function escapeHtml(value: string) {
   return value
@@ -171,8 +172,8 @@ function buildPageHtml(state: LoadedPublisherState, page: PageContract, registry
     ${metadata.metaImageHref ? `<meta property="og:image" content="${escapeHtml(metadata.metaImageHref)}" />` : ''}
     ${metadata.canonicalUrl ? `<link rel="canonical" href="${escapeHtml(metadata.canonicalUrl)}" />` : ''}
     ${metadata.faviconHref ? `<link rel="icon" href="${escapeHtml(metadata.faviconHref)}" />` : ''}
-    <link rel="manifest" href="/site.webmanifest" />
-    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="manifest" href="${STATIC_SHELL_LINKS.manifestHref}" />
+    <link rel="stylesheet" href="${STATIC_SHELL_LINKS.cssHref}" />
     <script type="application/ld+json">${metadata.schemaJson}</script>
   </head>
   <body data-page-id="${escapeHtml(page.id)}" data-page-slug="${escapeHtml(page.slug)}">
@@ -188,7 +189,7 @@ function buildPageHtml(state: LoadedPublisherState, page: PageContract, registry
     <script>
       window.__PUBLISHER_THEME__ = ${JSON.stringify(tokens, null, 2)};
     </script>
-    <script src="/assets/js/main.js"></script>
+    <script src="${STATIC_SHELL_LINKS.jsSrc}"></script>
   </body>
 </html>`;
 }
