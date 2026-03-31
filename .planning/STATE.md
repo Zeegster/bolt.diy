@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 08-VERIFICATION.md
-last_updated: "2026-03-31T00:58:08.334Z"
-last_activity: 2026-03-31 -- Phase 08 execution + verification complete
+stopped_at: Completed 09-VERIFICATION.md
+last_updated: "2026-03-31T01:25:35.709Z"
+last_activity: 2026-03-31 -- Phase 09 execution + verification complete
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 50
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 9
+  percent: 69
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** One operator must be able to move a site from source intake to release-ready output through a deterministic pipeline with minimal ambiguity and no manual `head` or runtime assembly work.
-**Current focus:** Phase 09 — align-static-site-project-contract
+**Current focus:** Phase 10 — rules-diagnostics-and-end-to-end-validation
 
 ## Current Position
 
-Phase: 09 (align-static-site-project-contract) — READY TO PLAN
-Plan: 0 of 3
-Status: Phase 08 complete, verification recorded
-Last activity: 2026-03-31 -- Phase 08 execution + verification complete
+Phase: 10 (rules-diagnostics-and-end-to-end-validation) — READY TO PLAN
+Plan: 0 of 4
+Status: Phase 09 complete, verification recorded
+Last activity: 2026-03-31 -- Phase 09 execution + verification complete
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 69%
 
 ## Performance Metrics
 
@@ -46,7 +46,7 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 07 | 3 | Complete | 2026-03-31 |
 | 08 | 3 | Complete | 2026-03-31 |
-| 09 | 0 | Not started | — |
+| 09 | 3 | Complete | 2026-03-31 |
 | 10 | 0 | Not started | — |
 
 **Recent Trend:**
@@ -55,6 +55,8 @@ Progress: [█████░░░░░] 50%
 - Trend: Reset for new milestone
 
 | Phase 08 P03 | 19min | 2 tasks | 4 files |
+| Phase 09 P03 | 8min | 2 tasks | 5 files |
+| Phase 09 P03 | 8min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Manual intake flow now has explicit resolve/apply/handoff actions with strict persisted-state validation and verified canonical vs blocked fixture behavior.
 - [Phase 08]: Integrity check IDs are now mapped explicitly for deterministic operator diagnostics.
 - [Phase 08]: Decorative-zone primary narrative ownership is enforced at runtime checks, not only template contracts.
+- [Phase 09]: Applied deterministic rich HTML normalization only on slot:html payloads.
+- [Phase 09]: Added release-gate diagnostic table-media-wrapper to fail unnormalized table/media payloads.
 
 ### Roadmap Evolution
 
@@ -82,14 +86,14 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Align generated output with static-site project contract and release diagnostics (Phases 09-10).
+- Execute Phase 10 diagnostics + end-to-end validation plans.
 
 ### Blockers/Concerns
 
-- Static-site contract + release diagnostics remain pending for Phases 09-10.
+- Phase 10 diagnostics taxonomy and end-to-end validation remain pending.
 
 ## Session Continuity
 
-Last session: 2026-03-31T00:58:08.331Z
-Stopped at: Completed 08-VERIFICATION.md
+Last session: 2026-03-31T01:25:35.707Z
+Stopped at: Completed 09-VERIFICATION.md
 Resume file: None

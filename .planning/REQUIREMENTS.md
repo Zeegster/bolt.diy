@@ -19,9 +19,9 @@
 
 ### Static-Site Rules Alignment
 
-- [ ] **STAT-01**: Generated project output follows the shared static-sites contract for page shell, internal linking policies by zone, and clean deployable static bundle structure.
-- [ ] **STAT-02**: Output metadata, URLs, canonical behavior, sitemap data, and technical files remain mutually consistent for the chosen public URL mode.
-- [ ] **STAT-03**: Tables and media are emitted through stable wrappers and attributes that satisfy mobile readability and layout-stability rules.
+- [x] **STAT-01**: Generated project output follows the shared static-sites contract for page shell, internal linking policies by zone, and clean deployable static bundle structure.
+- [x] **STAT-02**: Output metadata, URLs, canonical behavior, sitemap data, and technical files remain mutually consistent for the chosen public URL mode.
+- [x] **STAT-03**: Tables and media are emitted through stable wrappers and attributes that satisfy mobile readability and layout-stability rules.
 
 ### Operator Review and Repair
 
@@ -65,9 +65,9 @@
 | CONT-06 | Phase 8 | Complete |
 | CONT-07 | Phase 8 | Complete |
 | CONT-08 | Phase 8 | Complete |
-| STAT-01 | Phase 9 | Pending |
-| STAT-02 | Phase 9 | Pending |
-| STAT-03 | Phase 9 | Pending |
+| STAT-01 | Phase 9 | Complete |
+| STAT-02 | Phase 9 | Complete |
+| STAT-03 | Phase 9 | Complete |
 | OPER-05 | Phase 10 | Pending |
 | OPER-06 | Phase 10 | Pending |
 | OPER-07 | Phase 10 | Pending |
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after phase 08 verification*
+*Last updated: 2026-03-31 after phase 09 verification*
