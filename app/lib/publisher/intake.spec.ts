@@ -811,7 +811,7 @@ Only source text.`,
     expect(html).toContain('<p>Only source text.</p>');
   });
 
-  it('normalizes section headings without level into deterministic heading tags', () => {
+  it('does not inject synthetic headings for sections without explicit levels', () => {
     const sources: IntakeSourceSnapshot[] = [
       markdownSource(
         'content-source/fallback.md',
@@ -874,10 +874,65 @@ Alpha`,
     const applied = buildPublisherContractsFromIntakeSession(session);
     const html = String(applied.pages[0]?.zones.content?.slots[0]?.props?.html ?? '');
 
-    expect(html).toContain('<h1>Fallback</h1>');
-    expect(html).toContain('<h2>Details</h2>');
+    expect(html).not.toContain('<h1>');
+    expect(html).not.toContain('<h2>');
     expect(html).toContain('<p>Main copy.</p>');
     expect(html).toContain('<p>Alpha.</p>');
+  });
+
+  it('does not prepend h1 when source page heading is absent', () => {
+    const sources: IntakeSourceSnapshot[] = [
+      markdownSource(
+        'content-source/plain.md',
+        `---
+title: Plain Title
+description: Plain details
+---
+
+Paragraph only.`,
+      ),
+    ];
+    const manifest = buildIntakeSourceManifest(sources, '/work/imports/plain-site');
+    const session = createIntakeSession({
+      id: 'session-plain',
+      sourceRoot: '/work/imports/plain-site',
+      importKind: 'document',
+      scenario: 'document-import',
+      activeContentFamily: 'document',
+      projectName: 'Plain Site',
+      sourceManifest: manifest,
+      pages: [
+        {
+          id: 'plain',
+          name: 'Plain',
+          sourcePath: 'content-source/plain.md',
+          sourceFamily: 'document',
+          role: 'article',
+          slug: 'plain',
+          path: '/plain/',
+          title: 'Plain Title',
+          description: 'Plain details',
+          h1: '',
+          sections: [
+            {
+              id: 'plain-body',
+              kind: 'paragraph',
+              content: 'Paragraph only.',
+            },
+          ],
+          checks: [],
+          warnings: [],
+          confidence: 0.8,
+        },
+      ],
+      warnings: [],
+    });
+
+    const applied = buildPublisherContractsFromIntakeSession(session);
+    const html = String(applied.pages[0]?.zones.content?.slots[0]?.props?.html ?? '');
+
+    expect(html).not.toContain('<h1>');
+    expect(html).toContain('<p>Paragraph only.</p>');
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {

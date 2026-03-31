@@ -181,10 +181,7 @@ function parseHeadingLevel(value: unknown): 1 | 2 | 3 | 4 | 5 | 6 | null {
     : null;
 }
 
-function normalizeSectionHeading(
-  section: IntakeSectionDraft,
-  pageH1?: string,
-): { text: string; level: 1 | 2 | 3 | 4 | 5 | 6 } | null {
+function normalizeSectionHeading(section: IntakeSectionDraft): { text: string; level: 1 | 2 | 3 | 4 | 5 | 6 } | null {
   const rawHeading = section.heading?.trim();
 
   if (!rawHeading) {
@@ -206,18 +203,12 @@ function normalizeSectionHeading(
     };
   }
 
-  const normalizedH1 = pageH1?.trim();
-
-  if (normalizedH1 && rawHeading === normalizedH1) {
-    return { text: rawHeading, level: 1 };
-  }
-
-  return { text: rawHeading, level: 2 };
+  return null;
 }
 
-function renderSection(section: IntakeSectionDraft, sourceFamily: IntakePageDraft['sourceFamily'], pageH1?: string) {
+function renderSection(section: IntakeSectionDraft, sourceFamily: IntakePageDraft['sourceFamily']) {
   const blocks: string[] = [];
-  const heading = normalizeSectionHeading(section, pageH1);
+  const heading = normalizeSectionHeading(section);
 
   if (heading) {
     blocks.push(`<h${heading.level}>${escapeHtml(heading.text)}</h${heading.level}>`);
@@ -229,19 +220,47 @@ function renderSection(section: IntakeSectionDraft, sourceFamily: IntakePageDraf
   return blocks.filter(Boolean).join('\n');
 }
 
+function sectionContainsH1Heading(section: IntakeSectionDraft) {
+  if (section.level === 1) {
+    return true;
+  }
+
+  if (typeof section.heading !== 'string') {
+    return false;
+  }
+
+  return /^#\s+.+/.test(section.heading.trim());
+}
+
+function hasSourceApprovedPageH1(page: IntakePageDraft) {
+  if (page.sections.some((section) => sectionContainsH1Heading(section))) {
+    return true;
+  }
+
+  if (typeof page.rawSourcePreview === 'string' && page.rawSourcePreview.trim().length > 0) {
+    return /(^|\n)\s*#\s+\S|<h1[\s>]/i.test(page.rawSourcePreview);
+  }
+
+  if (typeof page.bodyHtml === 'string' && page.bodyHtml.trim().length > 0) {
+    return /<h1[\s>]/i.test(page.bodyHtml);
+  }
+
+  return false;
+}
+
 function renderPageContent(page: IntakePageDraft) {
   if (page.sections.length === 0) {
     return page.bodyHtml?.trim() || '';
   }
 
   const content = page.sections
-    .map((section) => renderSection(section, page.sourceFamily, page.h1))
+    .map((section) => renderSection(section, page.sourceFamily))
     .filter(Boolean)
     .join('\n');
 
   const h1 = page.h1?.trim();
 
-  if (!h1 || /<h1[\s>]/i.test(content)) {
+  if (!h1 || /<h1[\s>]/i.test(content) || !hasSourceApprovedPageH1(page)) {
     return content;
   }
 
