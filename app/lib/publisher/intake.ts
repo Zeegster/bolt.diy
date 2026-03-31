@@ -722,6 +722,16 @@ export function createIntakeSession(options: {
     checks: [],
     completionBlockers: [],
     reviewTasks: [],
+    reviewState: {
+      unresolvedSourceChoices: {},
+      selectedFixes: {},
+      completionMarkers: {
+        reviewReady: false,
+        intakeApplied: false,
+        updatedAt: now,
+      },
+      selectedBrokenPageIds: [],
+    },
     scriptRuns: [],
     currentPageId: options.pages[0]?.id,
     pageSourcePaths: options.pages.map((page) => page.sourcePath),

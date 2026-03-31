@@ -216,6 +216,32 @@ const intakeDisambiguationSchema = z
   })
   .passthrough();
 
+const intakeReviewStateSchema = z
+  .object({
+    unresolvedSourceChoices: z.record(z.string()).default({}),
+    selectedFixes: z
+      .record(
+        z
+          .object({
+            title: z.string().optional(),
+            description: z.string().optional(),
+            h1: z.string().optional(),
+            updatedAt: z.string().min(1),
+          })
+          .passthrough(),
+      )
+      .default({}),
+    completionMarkers: z
+      .object({
+        reviewReady: z.boolean().default(false),
+        intakeApplied: z.boolean().default(false),
+        updatedAt: z.string().min(1),
+      })
+      .passthrough(),
+    selectedBrokenPageIds: z.array(z.string()).default([]),
+  })
+  .passthrough();
+
 const intakeSessionCoreSchema = z
   .object({
     id: z.string().min(1),
@@ -259,6 +285,7 @@ const intakeSessionCoreSchema = z
     assetRoots: z.array(z.string()).optional(),
     supportedSources: z.array(intakeSourceSnapshotSchema).optional(),
     unsupportedSources: z.array(intakeSourceSnapshotSchema).optional(),
+    reviewState: intakeReviewStateSchema.optional(),
   })
   .passthrough();
 
@@ -337,6 +364,16 @@ function normalizeSession(
     scriptRuns,
     completionBlockers: core.completionBlockers ?? [],
     reviewTasks: core.reviewTasks ?? [],
+    reviewState: core.reviewState ?? {
+      unresolvedSourceChoices: {},
+      selectedFixes: {},
+      completionMarkers: {
+        reviewReady: false,
+        intakeApplied: false,
+        updatedAt: core.updatedAt,
+      },
+      selectedBrokenPageIds: [],
+    },
     disambiguation,
   };
 }

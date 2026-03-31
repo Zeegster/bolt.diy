@@ -289,6 +289,24 @@ export interface IntakeSession {
   assetRoots?: string[];
   supportedSources?: IntakeSourceSnapshot[];
   unsupportedSources?: IntakeSourceSnapshot[];
+  reviewState?: {
+    unresolvedSourceChoices: Record<string, string>;
+    selectedFixes: Record<
+      string,
+      {
+        title?: string;
+        description?: string;
+        h1?: string;
+        updatedAt: string;
+      }
+    >;
+    completionMarkers: {
+      reviewReady: boolean;
+      intakeApplied: boolean;
+      updatedAt: string;
+    };
+    selectedBrokenPageIds: string[];
+  };
 }
 
 export interface IntakeAiSectionSuggestion {
