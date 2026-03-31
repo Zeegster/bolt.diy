@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import type { IntakeSourceSnapshot } from '~/types/publisher';
 import { getPublisherImportedSourcePath, resolveUniqueImportedSourcePath } from './constants';
@@ -1263,7 +1263,8 @@ Alpha`,
     expect(loaded?.sources[0]?.text).toBe(source.text);
   });
 
-  it('fails fast when intake artifacts are structurally invalid', () => {
+  it('invalid persisted intake state is rejected', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const files = {
       '/home/project/.bolt/publisher/intake/session.json': {
         type: 'file',
@@ -1331,5 +1332,78 @@ Alpha`,
     });
 
     expect(loadIntakeSessionFromFiles(files)).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid intake artifacts (/home/project/.bolt/publisher/intake/session.json) pages'),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('rejects partial completion markers from persisted review state', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const files = {
+      '/home/project/.bolt/publisher/intake/session.json': {
+        type: 'file',
+        content: JSON.stringify({
+          id: 'broken-review-state',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          sourceLabel: 'broken',
+          importKind: 'html',
+          status: 'ready',
+          scenario: 'html-import',
+          activeContentFamily: 'html',
+          project: {
+            name: 'Broken',
+            defaultLanguage: 'en',
+            multilingual: false,
+            languages: ['en'],
+          },
+          shellCandidatePaths: [],
+          blockLibraryPaths: [],
+          warnings: [],
+          checks: [],
+          completionBlockers: [],
+          reviewTasks: [],
+          reviewState: {
+            unresolvedSourceChoices: {},
+            selectedFixes: {},
+            completionMarkers: {
+              reviewReady: true,
+              intakeApplied: false,
+            },
+            selectedBrokenPageIds: [],
+          },
+        }),
+      },
+      '/home/project/.bolt/publisher/intake/sources/manifest.json': {
+        type: 'file',
+        content: JSON.stringify([{ id: 's1', path: 'index.html', kind: 'file', size: 10, isBinary: false }]),
+      },
+      '/home/project/.bolt/publisher/intake/script-runs.json': {
+        type: 'file',
+        content: JSON.stringify([]),
+      },
+      '/home/project/.bolt/publisher/intake/pages/home.json': {
+        type: 'file',
+        content: JSON.stringify({
+          id: 'home',
+          name: 'Home',
+          sourcePath: 'index.html',
+          sourceFamily: 'html',
+          role: 'home',
+          slug: 'home',
+          path: '/',
+          title: 'Home',
+          sections: [],
+          checks: [],
+          warnings: [],
+          confidence: 1,
+        }),
+      },
+    } as any;
+
+    expect(loadIntakeSessionFromFiles(files)).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('reviewState.completionMarkers.updatedAt: Required'));
+    errorSpy.mockRestore();
   });
 });

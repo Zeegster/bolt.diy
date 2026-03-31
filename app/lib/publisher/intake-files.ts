@@ -319,6 +319,14 @@ function parseJson<T>(content?: string): T | undefined {
   }
 }
 
+function formatZodIssuePath(path: Array<string | number>) {
+  return path.length > 0 ? path.join('.') : '<root>';
+}
+
+function formatZodIssues(issues: z.ZodIssue[]) {
+  return issues.map((issue) => `${formatZodIssuePath(issue.path)}: ${issue.message}`).join('; ');
+}
+
 function normalizeSession(
   core: z.infer<typeof intakeSessionCoreSchema>,
   pages: IntakePageDraft[],
@@ -378,12 +386,24 @@ function normalizeSession(
   };
 }
 
-export function parseIntakeSessionRecord(record: unknown): IntakeSession | undefined {
+export function parseIntakeSessionRecord(
+  record: unknown,
+  options?: { throwOnError?: boolean; source?: string },
+): IntakeSession | undefined {
+  const sourceLabel = options?.source ?? 'persisted intake state';
+  const fail = (message: string) => {
+    if (options?.throwOnError) {
+      throw new Error(message);
+    }
+
+    console.error(message);
+
+    return undefined;
+  };
   const parsed = intakeSessionCoreSchema.safeParse(record);
 
   if (!parsed.success) {
-    console.error('Failed to parse intake session record', parsed.error.issues);
-    return undefined;
+    return fail(`Invalid ${sourceLabel}: ${formatZodIssues(parsed.error.issues)}`);
   }
 
   const core = parsed.data;
@@ -392,18 +412,15 @@ export function parseIntakeSessionRecord(record: unknown): IntakeSession | undef
   const scriptRuns = intakeScriptRunSchema.array().safeParse((record as any)?.scriptRuns ?? []);
 
   if (!pages.success) {
-    console.error('Failed to parse intake pages', pages.error.issues);
-    return undefined;
+    return fail(`Invalid ${sourceLabel} pages: ${formatZodIssues(pages.error.issues)}`);
   }
 
   if (!sources.success) {
-    console.error('Failed to parse intake sources', sources.error.issues);
-    return undefined;
+    return fail(`Invalid ${sourceLabel} sources: ${formatZodIssues(sources.error.issues)}`);
   }
 
   if (!scriptRuns.success) {
-    console.error('Failed to parse intake script runs', scriptRuns.error.issues);
-    return undefined;
+    return fail(`Invalid ${sourceLabel} script runs: ${formatZodIssues(scriptRuns.error.issues)}`);
   }
 
   return normalizeSession(core, pages.data, sources.data, scriptRuns.data);
@@ -460,10 +477,21 @@ export function loadIntakeSession(files: FileMap): IntakeSession | undefined {
     return undefined;
   }
 
-  return parseIntakeSessionRecord({
-    ...(sessionCore as Record<string, unknown>),
-    pages,
-    sources: sourcePayload,
-    scriptRuns: scriptRunPayload,
-  });
+  try {
+    return parseIntakeSessionRecord(
+      {
+        ...(sessionCore as Record<string, unknown>),
+        pages,
+        sources: sourcePayload,
+        scriptRuns: scriptRunPayload,
+      },
+      {
+        throwOnError: true,
+        source: `intake artifacts (${PUBLISHER_INTAKE_SESSION_FILE})`,
+      },
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : 'Invalid persisted intake state');
+    return undefined;
+  }
 }

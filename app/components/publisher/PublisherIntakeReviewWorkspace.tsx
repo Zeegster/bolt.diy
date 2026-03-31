@@ -33,6 +33,9 @@ interface PublisherIntakeReviewWorkspaceProps {
   onToggleBrokenPage: (pageId: string, selected: boolean) => void;
   onNormalizeBroken: () => void;
   onNormalizeAllBroken: () => void;
+  onResolveIntakeItem: (itemId: string) => void;
+  onApplySelectedFixes: (pageId: string) => void;
+  onMarkIntakeReviewReady: () => void;
   onResolveDisambiguation?: (selection: {
     importKind: IntakeImportKind;
     templateCandidatePath?: string;
@@ -86,6 +89,9 @@ export function PublisherIntakeReviewWorkspace({
   onToggleBrokenPage,
   onNormalizeBroken,
   onNormalizeAllBroken,
+  onResolveIntakeItem,
+  onApplySelectedFixes,
+  onMarkIntakeReviewReady,
   onResolveDisambiguation,
 }: PublisherIntakeReviewWorkspaceProps) {
   const { settings } = useSettings();
@@ -131,6 +137,7 @@ export function PublisherIntakeReviewWorkspace({
   const completionBlockers = session.completionBlockers ?? [];
   const reviewTasks = session.reviewTasks ?? [];
   const intakeStateLabel = completionBlockers.length > 0 ? 'Blocked' : reviewTasks.length > 0 ? 'Reviewable' : 'Ready';
+  const unresolvedItemIds = [...completionBlockers, ...reviewTasks].map((item) => item.id);
   const templateCandidates =
     session.disambiguation?.templateCandidatePaths ?? session.scenarioResult?.templateCandidatePaths ?? [];
   const homeCandidates = session.disambiguation?.homeCandidatePaths ?? session.scenarioResult?.homeCandidatePaths ?? [];
@@ -249,6 +256,43 @@ export function PublisherIntakeReviewWorkspace({
             className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-medium text-white"
           >
             Apply import
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+          <button
+            type="button"
+            disabled={unresolvedItemIds.length === 0}
+            onClick={() => {
+              const nextUnresolvedId = unresolvedItemIds[0];
+
+              if (nextUnresolvedId) {
+                onResolveIntakeItem(nextUnresolvedId);
+              }
+            }}
+            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3 disabled:opacity-60"
+          >
+            Resolve next intake item
+          </button>
+          <button
+            type="button"
+            disabled={!selectedPage}
+            onClick={() => {
+              if (selectedPage) {
+                onApplySelectedFixes(selectedPage.id);
+              }
+            }}
+            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs hover:bg-bolt-elements-background-depth-3 disabled:opacity-60"
+          >
+            Apply approved fixes
+          </button>
+          <button
+            type="button"
+            disabled={completionBlockers.length > 0}
+            onClick={onMarkIntakeReviewReady}
+            className="rounded-lg bg-accent-500/15 px-3 py-2 text-xs text-accent-300 hover:bg-accent-500/20 disabled:opacity-60"
+          >
+            Mark intake handoff-ready
           </button>
         </div>
 

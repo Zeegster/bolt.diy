@@ -30,7 +30,7 @@ import {
   readImageDimensions,
 } from '~/lib/publisher/file-helpers';
 import { loadIntakeSession } from '~/lib/publisher/intake-files';
-import { buildIntakePageChecks, buildIntakeSessionChecks } from '~/lib/publisher/intake';
+import { buildIntakePageChecks, buildIntakeSessionChecks, deriveIntakeWorkItems } from '~/lib/publisher/intake';
 import { normalizeIntakePageWithProvider, normalizeIntakePagesWithProvider } from '~/lib/publisher/intake-ai';
 import { buildImportedBundleAdapter } from '~/lib/publisher/intake-adapter';
 import { buildPromptForRepairIntent } from '~/lib/publisher/agent-model';
@@ -207,6 +207,19 @@ function getGeneratedPagePath(page: PageContract) {
   return page.path === '/'
     ? `${PUBLISHER_GENERATED_DIR}/index.html`
     : `${PUBLISHER_GENERATED_DIR}${page.path}/index.html`;
+}
+
+function createDefaultReviewState(updatedAt: string): NonNullable<IntakeSession['reviewState']> {
+  return {
+    unresolvedSourceChoices: {},
+    selectedFixes: {},
+    completionMarkers: {
+      reviewReady: false,
+      intakeApplied: false,
+      updatedAt,
+    },
+    selectedBrokenPageIds: [],
+  };
 }
 
 export function StructureView() {
@@ -468,6 +481,19 @@ export function StructureView() {
     }
   };
 
+  const finalizeIntakeSession = (session: IntakeSession): IntakeSession => {
+    const checks = buildIntakeSessionChecks(session);
+    const workItems = deriveIntakeWorkItems({ checks });
+
+    return {
+      ...session,
+      checks,
+      completionBlockers: workItems.completionBlockers,
+      reviewTasks: workItems.reviewTasks,
+      reviewState: session.reviewState ?? createDefaultReviewState(session.updatedAt),
+    };
+  };
+
   const updateIntakePage = async (pageId: string, nextPage: IntakePageDraft) => {
     if (!intakeDraft) {
       return;
@@ -482,13 +508,137 @@ export function StructureView() {
       ...intakeDraft,
       pages: intakeDraft.pages.map((page) => (page.id === pageId ? normalizedPage : page)),
       currentPageId: pageId,
+      reviewState: {
+        ...(intakeDraft.reviewState ?? createDefaultReviewState(intakeDraft.updatedAt)),
+        selectedFixes: {
+          ...(intakeDraft.reviewState?.selectedFixes ?? {}),
+          [pageId]: {
+            title: normalizedPage.title,
+            description: normalizedPage.description,
+            h1: normalizedPage.h1,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      },
       updatedAt: new Date().toISOString(),
     };
-    nextSession.checks = buildIntakeSessionChecks(nextSession);
+    const finalizedSession = finalizeIntakeSession(nextSession);
 
-    setIntakeDraft(nextSession);
+    setIntakeDraft(finalizedSession);
     setIntakeSelectedPageId(pageId);
-    await persistIntakeDraft(nextSession);
+    await persistIntakeDraft(finalizedSession);
+  };
+
+  const handleResolveIntakeItem = async (itemId: string) => {
+    if (!intakeDraft) {
+      return;
+    }
+
+    const updatedAt = new Date().toISOString();
+    const reviewState = intakeDraft.reviewState ?? createDefaultReviewState(intakeDraft.updatedAt);
+    const nextChecks = intakeDraft.checks.filter((check) => check.id !== itemId);
+    const nextSession: IntakeSession = {
+      ...intakeDraft,
+      checks: nextChecks,
+      reviewState: {
+        ...reviewState,
+        unresolvedSourceChoices: {
+          ...reviewState.unresolvedSourceChoices,
+          [itemId]: 'resolved',
+        },
+        completionMarkers: {
+          ...reviewState.completionMarkers,
+          updatedAt,
+        },
+      },
+      updatedAt,
+    };
+    const finalizedSession = finalizeIntakeSession(nextSession);
+
+    setIntakeDraft(finalizedSession);
+    await persistIntakeDraft(finalizedSession);
+    toast.success('Intake review item resolved.');
+  };
+
+  const handleApplySelectedFixes = async (pageId: string) => {
+    if (!intakeDraft) {
+      return;
+    }
+
+    const reviewState = intakeDraft.reviewState ?? createDefaultReviewState(intakeDraft.updatedAt);
+    const selectedFix = reviewState.selectedFixes[pageId];
+
+    if (!selectedFix) {
+      toast.info('No approved fixes were selected for this page yet.');
+      return;
+    }
+
+    const targetPage = intakeDraft.pages.find((page) => page.id === pageId);
+
+    if (!targetPage) {
+      return;
+    }
+
+    const nextPage: IntakePageDraft = {
+      ...targetPage,
+      title: selectedFix.title ?? targetPage.title,
+      description: selectedFix.description ?? targetPage.description,
+      h1: selectedFix.h1 ?? targetPage.h1,
+    };
+    nextPage.checks = buildIntakePageChecks(nextPage);
+
+    const updatedAt = new Date().toISOString();
+    const nextSession: IntakeSession = {
+      ...intakeDraft,
+      pages: intakeDraft.pages.map((page) => (page.id === pageId ? nextPage : page)),
+      reviewState: {
+        ...reviewState,
+        selectedBrokenPageIds: reviewState.selectedBrokenPageIds.filter((id) => id !== pageId),
+        completionMarkers: {
+          ...reviewState.completionMarkers,
+          intakeApplied: true,
+          updatedAt,
+        },
+      },
+      updatedAt,
+    };
+    const finalizedSession = finalizeIntakeSession(nextSession);
+
+    setIntakeDraft(finalizedSession);
+    await persistIntakeDraft(finalizedSession);
+    toast.success('Approved fixes applied to the intake page.');
+  };
+
+  const handleMarkIntakeReviewReady = async () => {
+    if (!intakeDraft) {
+      return;
+    }
+
+    if ((intakeDraft.completionBlockers ?? []).length > 0) {
+      toast.error('Resolve completion blockers before marking intake handoff-ready.');
+      return;
+    }
+
+    const updatedAt = new Date().toISOString();
+    const reviewState = intakeDraft.reviewState ?? createDefaultReviewState(intakeDraft.updatedAt);
+    const nextSession: IntakeSession = {
+      ...intakeDraft,
+      status: 'ready',
+      reviewState: {
+        ...reviewState,
+        completionMarkers: {
+          ...reviewState.completionMarkers,
+          reviewReady: true,
+          updatedAt,
+        },
+      },
+      updatedAt,
+    };
+    const finalizedSession = finalizeIntakeSession(nextSession);
+
+    setIntakeDraft(finalizedSession);
+    await persistIntakeDraft(finalizedSession);
+    toast.success('Intake is marked handoff-ready for contract review.');
   };
 
   const updateIntakeProject = async (nextProject: IntakeProjectDraft) => {
@@ -501,10 +651,10 @@ export function StructureView() {
       project: nextProject,
       updatedAt: new Date().toISOString(),
     };
-    nextSession.checks = buildIntakeSessionChecks(nextSession);
+    const finalizedSession = finalizeIntakeSession(nextSession);
 
-    setIntakeDraft(nextSession);
-    await persistIntakeDraft(nextSession);
+    setIntakeDraft(finalizedSession);
+    await persistIntakeDraft(finalizedSession);
   };
 
   const getSelectedProviderRuntime = () => {
@@ -589,10 +739,10 @@ export function StructureView() {
         scriptRuns: [...intakeDraft.scriptRuns, { ...result.scriptRun, sessionId: intakeDraft.id }],
         updatedAt: new Date().toISOString(),
       };
-      nextSession.checks = buildIntakeSessionChecks(nextSession);
+      const finalizedSession = finalizeIntakeSession(nextSession);
 
-      setIntakeDraft(nextSession);
-      await persistIntakeDraft(nextSession);
+      setIntakeDraft(finalizedSession);
+      await persistIntakeDraft(finalizedSession);
       toast.success(
         applySuggestion ? 'AI suggestion applied to the draft.' : 'AI suggestion logged without overwriting the draft.',
       );
@@ -651,12 +801,14 @@ export function StructureView() {
       scriptRuns: [...intakeDraft.scriptRuns, { ...batchResult.scriptRun, sessionId: intakeDraft.id }],
       updatedAt: new Date().toISOString(),
     };
-    nextSession.checks = buildIntakeSessionChecks(nextSession);
+    const finalizedSession = finalizeIntakeSession(nextSession);
 
-    setIntakeDraft(nextSession);
-    await persistIntakeDraft(nextSession);
+    setIntakeDraft(finalizedSession);
+    await persistIntakeDraft(finalizedSession);
     setSelectedBrokenPageIds((current) =>
-      current.filter((pageId) => nextSession.pages.find((page) => page.id === pageId && isBrokenMetadataPage(page))),
+      current.filter((pageId) =>
+        finalizedSession.pages.find((page) => page.id === pageId && isBrokenMetadataPage(page)),
+      ),
     );
     toast.success(
       `Applied AI metadata suggestions to ${pagesToApply.length} page${pagesToApply.length > 1 ? 's' : ''}.`,
@@ -723,9 +875,10 @@ export function StructureView() {
           scriptRuns: [...intakeDraft.scriptRuns, { ...auditedScriptRun, sessionId: intakeDraft.id }],
           updatedAt: new Date().toISOString(),
         };
+        const finalizedSession = finalizeIntakeSession(nextSession);
 
-        setIntakeDraft(nextSession);
-        await persistIntakeDraft(nextSession);
+        setIntakeDraft(finalizedSession);
+        await persistIntakeDraft(finalizedSession);
         toast.success('AI batch suggestion logged without overwriting the draft.');
       }
     } catch (error) {
@@ -804,11 +957,11 @@ export function StructureView() {
       scriptRuns: intakeDraft.scriptRuns,
       updatedAt: new Date().toISOString(),
     };
-    nextSession.checks = buildIntakeSessionChecks(nextSession);
+    const finalizedSession = finalizeIntakeSession(nextSession);
 
-    setIntakeDraft(nextSession);
-    setIntakeSelectedPageId(nextSession.currentPageId);
-    await persistIntakeDraft(nextSession);
+    setIntakeDraft(finalizedSession);
+    setIntakeSelectedPageId(finalizedSession.currentPageId);
+    await persistIntakeDraft(finalizedSession);
     toast.success('Intake disambiguation resolved. Review is now unlocked.');
   };
 
@@ -823,7 +976,23 @@ export function StructureView() {
     }
 
     try {
-      const result = buildPublisherContractsFromIntakeSession(intakeDraft);
+      const updatedAt = new Date().toISOString();
+      const reviewState = intakeDraft.reviewState ?? createDefaultReviewState(intakeDraft.updatedAt);
+      const sessionForApply: IntakeSession = {
+        ...intakeDraft,
+        reviewState: {
+          ...reviewState,
+          completionMarkers: {
+            ...reviewState.completionMarkers,
+            intakeApplied: true,
+            reviewReady: true,
+            updatedAt,
+          },
+        },
+        updatedAt,
+      };
+      const finalizedSession = finalizeIntakeSession(sessionForApply);
+      const result = buildPublisherContractsFromIntakeSession(finalizedSession);
 
       for (const [filePath, content] of Object.entries(result.files)) {
         if (shouldWritePublisherFileToProject(filePath)) {
@@ -850,6 +1019,8 @@ export function StructureView() {
       });
 
       setSelectedPageId(result.pages[0]?.id);
+      setIntakeDraft(finalizedSession);
+      await persistIntakeDraft(finalizedSession);
       await rebuildPreview(result.pages[0]?.id);
       toast.success('Intake imported into Publisher contracts');
     } catch (error) {
@@ -982,6 +1153,15 @@ export function StructureView() {
         }}
         onNormalizeAllBroken={() => {
           void handleNormalizeBrokenPages('all');
+        }}
+        onResolveIntakeItem={(itemId) => {
+          void handleResolveIntakeItem(itemId);
+        }}
+        onApplySelectedFixes={(pageId) => {
+          void handleApplySelectedFixes(pageId);
+        }}
+        onMarkIntakeReviewReady={() => {
+          void handleMarkIntakeReviewReady();
         }}
         onResolveDisambiguation={(selection) => {
           void handleResolveDisambiguation(selection);
