@@ -539,6 +539,56 @@ describe('publisher workflow', () => {
     expect(html).not.toContain('<h1>Overview</h1>');
   });
 
+  it('table and media wrappers are normalized in rich html output', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'main',
+                  blockId: 'content-prose',
+                  props: {
+                    sectionTitle: 'Body',
+                    html: '<table><tr><td>Cell</td></tr></table><p><img src="/assets/image.png" alt="Demo" /></p>',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const result = assemblePublisherProject(loadPublisherState(files), publisherBlockRegistry, {
+      mode: 'publisher',
+      currentPage: 'home',
+    });
+    const html = result.files['/home/project/.bolt/publisher/generated/index.html'];
+
+    expect(html).toContain(
+      '<div class="publisher-table-scroll" data-contract="table-scroll"><table class="publisher-table">',
+    );
+    expect(html).toContain('class="publisher-rich-media"');
+    expect(html).toContain('loading="lazy"');
+    expect(html).toContain('decoding="async"');
+  });
+
   it('blocks publish contract when release checks fail', () => {
     const files = createPublisherFiles();
     files[PUBLISHER_PROJECT_FILE] = {
