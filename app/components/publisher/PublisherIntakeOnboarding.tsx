@@ -164,7 +164,7 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
             value={name}
             onChange={(event) => setName(event.target.value)}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="Spinaura Casino"
+            placeholder="Sample Publisher Site"
             aria-invalid={Boolean(fieldErrors.name)}
             aria-describedby={fieldErrors.name ? 'publisher-onboarding-name-error' : undefined}
           />
