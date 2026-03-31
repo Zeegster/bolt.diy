@@ -82,6 +82,31 @@ export type PublisherDiagnosticCategory =
   | 'deprecated'
   | 'output'
   | 'content';
+export type IntakeDiagnosticOrigin = 'source' | 'template' | 'runtime';
+export type PublisherDiagnosticOrigin = 'source' | 'template' | 'runtime';
+
+const INTAKE_DIAGNOSTIC_ORIGIN_MAP: Partial<Record<string, IntakeDiagnosticOrigin>> = {
+  'missing-page-title': 'source',
+  'missing-page-description': 'source',
+  'missing-page-h1': 'source',
+  'missing-page-sections': 'source',
+  'template-heading-injection': 'template',
+  'decorative-zone-content-injection': 'template',
+  'decorative-zone-primary-content': 'template',
+};
+
+const PUBLISHER_DIAGNOSTIC_ORIGIN_MAP: Partial<Record<string, PublisherDiagnosticOrigin>> = {
+  ...INTAKE_DIAGNOSTIC_ORIGIN_MAP,
+  'zone-link-policy': 'runtime',
+  'technical-file-consistency': 'runtime',
+  'table-media-wrapper': 'runtime',
+};
+
+const DIAGNOSTIC_ORIGIN_LABELS: Record<'source' | 'template' | 'runtime', string> = {
+  source: 'Source input',
+  template: 'Template composition',
+  runtime: 'Runtime generation',
+};
 
 const INTEGRITY_INTAKE_CATEGORY_MAP: Partial<Record<string, IntakeDiagnosticCategory>> = {
   'template-heading-injection': 'content',
@@ -121,6 +146,26 @@ export function categorizeIntakeCheck(
   }
 
   return 'content';
+}
+
+export function deriveIntakeDiagnosticOrigin(check: Pick<IntakeCheck, 'id'>): IntakeDiagnosticOrigin {
+  return INTAKE_DIAGNOSTIC_ORIGIN_MAP[check.id] ?? 'runtime';
+}
+
+export function derivePublisherDiagnosticOrigin(check: Pick<CheckReport, 'name'>): PublisherDiagnosticOrigin {
+  return PUBLISHER_DIAGNOSTIC_ORIGIN_MAP[check.name] ?? 'runtime';
+}
+
+export function getDiagnosticOriginLabel(origin: 'source' | 'template' | 'runtime') {
+  return DIAGNOSTIC_ORIGIN_LABELS[origin];
+}
+
+export function getIntakeDiagnosticOriginLabel(origin: IntakeDiagnosticOrigin) {
+  return getDiagnosticOriginLabel(origin);
+}
+
+export function getPublisherDiagnosticOriginLabel(origin: PublisherDiagnosticOrigin) {
+  return getDiagnosticOriginLabel(origin);
 }
 
 export function getIntakeDiagnosticLabel(category: IntakeDiagnosticCategory) {
