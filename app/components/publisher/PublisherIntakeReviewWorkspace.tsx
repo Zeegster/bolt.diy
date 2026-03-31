@@ -14,6 +14,7 @@ import {
   categorizeIntakeCheck,
   createIntakeReviewDraft,
   deriveBatchNormalizeReviewState,
+  getIntakeDiagnosticRemediation,
   getIntakeDiagnosticLabel,
 } from '~/lib/publisher/intake-ui';
 import { IntakeAssetField } from './IntakeAssetField';
@@ -536,6 +537,9 @@ export function PublisherIntakeReviewWorkspace({
                       </div>
                       <div className="font-medium">{check.message}</div>
                       {check.details?.length ? <div className="mt-1">{check.details.join(' · ')}</div> : null}
+                      {getIntakeDiagnosticRemediation(check) ? (
+                        <div className="mt-1 text-[11px] opacity-90">Fix: {getIntakeDiagnosticRemediation(check)}</div>
+                      ) : null}
                     </div>
                   ))
                 ) : (

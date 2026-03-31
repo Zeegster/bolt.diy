@@ -83,9 +83,25 @@ export type PublisherDiagnosticCategory =
   | 'output'
   | 'content';
 
+const INTEGRITY_INTAKE_CATEGORY_MAP: Partial<Record<string, IntakeDiagnosticCategory>> = {
+  'template-heading-injection': 'content',
+  'decorative-zone-content-injection': 'zone',
+  'decorative-zone-primary-content': 'zone',
+};
+
+const INTEGRITY_PUBLISHER_CATEGORY_MAP: Partial<Record<string, PublisherDiagnosticCategory>> = {
+  'template-heading-injection': 'content',
+  'decorative-zone-content-injection': 'composition',
+  'decorative-zone-primary-content': 'composition',
+};
+
 export function categorizeIntakeCheck(
   check: Pick<IntakeCheck, 'id' | 'message' | 'details'>,
 ): IntakeDiagnosticCategory {
+  if (INTEGRITY_INTAKE_CATEGORY_MAP[check.id]) {
+    return INTEGRITY_INTAKE_CATEGORY_MAP[check.id]!;
+  }
+
   const haystack = [check.id, check.message, ...(check.details ?? [])].join(' ').toLowerCase();
 
   if (haystack.includes('metadata') || haystack.includes('canonical') || haystack.includes('robots')) {
@@ -125,6 +141,10 @@ export function getIntakeDiagnosticLabel(category: IntakeDiagnosticCategory) {
 export function categorizePublisherDiagnostic(
   check: Pick<CheckReport, 'name' | 'message' | 'details'>,
 ): PublisherDiagnosticCategory {
+  if (INTEGRITY_PUBLISHER_CATEGORY_MAP[check.name]) {
+    return INTEGRITY_PUBLISHER_CATEGORY_MAP[check.name]!;
+  }
+
   const haystack = [check.name, check.message, ...(check.details ?? [])].join(' ').toLowerCase();
 
   if (haystack.includes('ownership') || haystack.includes('reserved')) {
@@ -168,6 +188,19 @@ export function categorizePublisherDiagnostic(
   }
 
   return 'content';
+}
+
+export function getIntakeDiagnosticRemediation(check: Pick<IntakeCheck, 'id'>): string | undefined {
+  switch (check.id) {
+    case 'template-heading-injection':
+      return 'Fix the template so heading tags come only from source-approved page fields and sections.';
+    case 'decorative-zone-content-injection':
+      return 'Move article-like html out of decorative zones and keep prose in the content zone.';
+    case 'decorative-zone-primary-content':
+      return 'Reassign primary narrative copy to content zone slots and keep decorative zones supporting only.';
+    default:
+      return undefined;
+  }
 }
 
 export function getPublisherDiagnosticLabel(category: PublisherDiagnosticCategory) {

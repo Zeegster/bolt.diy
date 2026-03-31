@@ -28,7 +28,12 @@ import {
   saveIntakeSession,
 } from './intake-session';
 import { buildImportedBundleAdapter } from './intake-adapter';
-import { createIntakePageDraft, deriveBatchNormalizeReviewState } from './intake-ui';
+import {
+  categorizeIntakeCheck,
+  createIntakePageDraft,
+  deriveBatchNormalizeReviewState,
+  getIntakeDiagnosticRemediation,
+} from './intake-ui';
 import { deriveCanonicalIntakeLifecycleState } from './status';
 import { runPublisherChecks } from './checker';
 import { publisherBlockRegistry } from './block-registry';
@@ -984,7 +989,7 @@ Paragraph only.`,
     expect(draft.sections[0]?.content).toContain('<p>Main article content.</p>');
   });
 
-  it('fails when decorative zone carries primary content while content is minimal', () => {
+  it('decorative zones cannot own primary content when content zone is minimal', () => {
     const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
     const session = createIntakeSession({
       id: 'session-zone-ownership-fail',
@@ -1123,6 +1128,37 @@ Paragraph only.`,
     );
 
     expect(checks.some((check) => check.name === 'decorative-zone-primary-content')).toBe(false);
+  });
+
+  it('categorizes integrity diagnostics', () => {
+    expect(
+      categorizeIntakeCheck({
+        id: 'template-heading-injection',
+        message: 'Template injected heading tags.',
+      }),
+    ).toBe('content');
+    expect(
+      categorizeIntakeCheck({
+        id: 'decorative-zone-content-injection',
+        message: 'Decorative zone carries article html.',
+      }),
+    ).toBe('zone');
+    expect(
+      categorizeIntakeCheck({
+        id: 'decorative-zone-primary-content',
+        message: 'Decorative zone owns primary narrative.',
+      }),
+    ).toBe('zone');
+
+    expect(getIntakeDiagnosticRemediation({ id: 'template-heading-injection' })).toContain(
+      'heading tags come only from source-approved page fields and sections',
+    );
+    expect(getIntakeDiagnosticRemediation({ id: 'decorative-zone-content-injection' })).toContain(
+      'Move article-like html out of decorative zones',
+    );
+    expect(getIntakeDiagnosticRemediation({ id: 'decorative-zone-primary-content' })).toContain(
+      'Reassign primary narrative copy to content zone slots',
+    );
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {
