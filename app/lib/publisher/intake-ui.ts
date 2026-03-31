@@ -168,6 +168,14 @@ export function getPublisherDiagnosticOriginLabel(origin: PublisherDiagnosticOri
   return getDiagnosticOriginLabel(origin);
 }
 
+export function getIntakeDiagnosticOriginLine(check: Pick<IntakeCheck, 'id'>) {
+  return `Origin: ${getIntakeDiagnosticOriginLabel(deriveIntakeDiagnosticOrigin(check))}`;
+}
+
+export function getPublisherDiagnosticOriginLine(check: Pick<CheckReport, 'name'>) {
+  return `Origin: ${getPublisherDiagnosticOriginLabel(derivePublisherDiagnosticOrigin(check))}`;
+}
+
 export function getIntakeDiagnosticLabel(category: IntakeDiagnosticCategory) {
   switch (category) {
     case 'metadata':

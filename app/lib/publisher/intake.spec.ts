@@ -33,6 +33,7 @@ import {
   createIntakePageDraft,
   deriveBatchNormalizeReviewState,
   deriveIntakeDiagnosticOrigin,
+  getIntakeDiagnosticOriginLine,
   getDiagnosticOriginLabel,
   getIntakeDiagnosticRemediation,
 } from './intake-ui';
@@ -1163,7 +1164,7 @@ Paragraph only.`,
     );
   });
 
-  it('maps intake diagnostics to deterministic origin layers', () => {
+  it('Origin: maps intake diagnostics to deterministic origin layers', () => {
     expect(deriveIntakeDiagnosticOrigin({ id: 'template-heading-injection' })).toBe('template');
     expect(deriveIntakeDiagnosticOrigin({ id: 'decorative-zone-content-injection' })).toBe('template');
     expect(deriveIntakeDiagnosticOrigin({ id: 'decorative-zone-primary-content' })).toBe('template');
@@ -1174,6 +1175,9 @@ Paragraph only.`,
     expect(getDiagnosticOriginLabel('source')).toBe('Source input');
     expect(getDiagnosticOriginLabel('template')).toBe('Template composition');
     expect(getDiagnosticOriginLabel('runtime')).toBe('Runtime generation');
+    expect(getIntakeDiagnosticOriginLine({ id: 'missing-page-title' })).toBe('Origin: Source input');
+    expect(getIntakeDiagnosticOriginLine({ id: 'template-heading-injection' })).toBe('Origin: Template composition');
+    expect(getIntakeDiagnosticOriginLine({ id: 'zone-link-policy' })).toBe('Origin: Runtime generation');
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {

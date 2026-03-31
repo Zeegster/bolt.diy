@@ -15,6 +15,7 @@ import {
   createIntakeReviewDraft,
   derivePublisherDiagnosticOrigin,
   getDiagnosticOriginLabel,
+  getPublisherDiagnosticOriginLine,
 } from './intake-ui';
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
@@ -1704,7 +1705,7 @@ describe('publisher workflow', () => {
     ).toBe('composition');
   });
 
-  it('maps publisher diagnostics to deterministic origin layers', () => {
+  it('Origin: maps publisher diagnostics to deterministic origin layers', () => {
     expect(derivePublisherDiagnosticOrigin({ name: 'template-heading-injection' })).toBe('template');
     expect(derivePublisherDiagnosticOrigin({ name: 'decorative-zone-content-injection' })).toBe('template');
     expect(derivePublisherDiagnosticOrigin({ name: 'decorative-zone-primary-content' })).toBe('template');
@@ -1718,6 +1719,11 @@ describe('publisher workflow', () => {
     expect(getDiagnosticOriginLabel('source')).toBe('Source input');
     expect(getDiagnosticOriginLabel('template')).toBe('Template composition');
     expect(getDiagnosticOriginLabel('runtime')).toBe('Runtime generation');
+    expect(getPublisherDiagnosticOriginLine({ name: 'missing-page-h1' })).toBe('Origin: Source input');
+    expect(getPublisherDiagnosticOriginLine({ name: 'template-heading-injection' })).toBe(
+      'Origin: Template composition',
+    );
+    expect(getPublisherDiagnosticOriginLine({ name: 'technical-file-consistency' })).toBe('Origin: Runtime generation');
   });
 
   it('describes constrained slot editing boundaries for reserved and invalid props', () => {

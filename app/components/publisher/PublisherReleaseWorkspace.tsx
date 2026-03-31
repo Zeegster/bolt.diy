@@ -9,7 +9,11 @@ import {
   type PublisherWorkflowState,
 } from '~/types/publisher';
 import { deriveRepairIntentFromCheck } from '~/lib/publisher/agent-model';
-import { categorizePublisherDiagnostic, getPublisherDiagnosticLabel } from '~/lib/publisher/intake-ui';
+import {
+  categorizePublisherDiagnostic,
+  getPublisherDiagnosticLabel,
+  getPublisherDiagnosticOriginLine,
+} from '~/lib/publisher/intake-ui';
 import type { PublisherOrchestrationAction } from '~/lib/publisher/orchestration';
 
 const statusOrder: PublisherProjectStatus[] = [
@@ -506,6 +510,9 @@ export function PublisherReleaseWorkspace({
                             <span className="uppercase tracking-[0.16em]">{check.status}</span>
                           </div>
                           <div className="mt-1 opacity-90">{check.message}</div>
+                          <div className="mt-1 text-[11px] opacity-90">
+                            {getPublisherDiagnosticOriginLine(check.sampleCheck)}
+                          </div>
                           <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
                             Inspect ({check.count}): {check.targets.join(' · ')}
                           </div>
