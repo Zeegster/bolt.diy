@@ -165,7 +165,8 @@ describe('publisher workflow release semantics', () => {
 
     expect(workflow.status).toBe('failed');
     expect(workflow.step).toBe('release');
-    expect(workflow.blockingReason).toContain('1 release blocking');
+    expect(workflow.blockingReason).toContain('Release blockers:');
+    expect(workflow.blockingReason).toContain('site-url');
     expect(workflow.releaseStage).toBe('check');
     expect(workflow.releaseStageStatus).toBe('failed');
     expect(workflow.releaseFailureStage).toBe('check');
