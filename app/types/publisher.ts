@@ -271,6 +271,8 @@ export interface IntakeSession {
   homePageCandidatePath?: string;
   warnings: IntakeWarning[];
   checks: IntakeCheck[];
+  completionBlockers?: IntakeCheck[];
+  reviewTasks?: IntakeCheck[];
   scriptRuns: IntakeScriptRun[];
   currentPageId?: string;
   sourceManifest?: IntakeSourceManifest;

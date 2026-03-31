@@ -142,6 +142,10 @@ export function deriveCanonicalIntakeLifecycleState(options: {
     return 'pending-disambiguation';
   }
 
+  if ((intakeSession.completionBlockers?.length ?? 0) > 0) {
+    return 'pending-disambiguation';
+  }
+
   if (intakeSession.status !== 'applied') {
     return 'intake-review';
   }

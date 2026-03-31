@@ -235,6 +235,8 @@ const intakeSessionCoreSchema = z
     homePageCandidatePath: z.string().optional(),
     warnings: z.array(intakeWarningSchema).default([]),
     checks: z.array(intakeCheckSchema).default([]),
+    completionBlockers: z.array(intakeCheckSchema).default([]),
+    reviewTasks: z.array(intakeCheckSchema).default([]),
     currentPageId: z.string().optional(),
     sourceManifest: z
       .object({
@@ -333,6 +335,8 @@ function normalizeSession(
     pages: pages.sort((left, right) => left.path.localeCompare(right.path)),
     sources,
     scriptRuns,
+    completionBlockers: core.completionBlockers ?? [],
+    reviewTasks: core.reviewTasks ?? [],
     disambiguation,
   };
 }

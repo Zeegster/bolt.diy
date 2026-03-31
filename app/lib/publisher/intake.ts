@@ -634,6 +634,19 @@ export function buildIntakeSessionChecks(session: IntakeSession): IntakeCheck[] 
   return checks;
 }
 
+export function deriveIntakeWorkItems(session: Pick<IntakeSession, 'checks'>): {
+  completionBlockers: IntakeCheck[];
+  reviewTasks: IntakeCheck[];
+} {
+  const completionBlockers = session.checks.filter((check) => check.severity === 'fail');
+  const reviewTasks = session.checks.filter((check) => check.severity !== 'fail');
+
+  return {
+    completionBlockers,
+    reviewTasks,
+  };
+}
+
 export function buildIntakeAiSuggestionFromText(text: string): IntakeAiSuggestion {
   return {
     title: null,
@@ -707,6 +720,8 @@ export function createIntakeSession(options: {
     sourceManifest: options.sourceManifest,
     warnings: options.warnings ?? [],
     checks: [],
+    completionBlockers: [],
+    reviewTasks: [],
     scriptRuns: [],
     currentPageId: options.pages[0]?.id,
     pageSourcePaths: options.pages.map((page) => page.sourcePath),

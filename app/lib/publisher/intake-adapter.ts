@@ -11,6 +11,7 @@ import {
   buildIntakeSessionChecks,
   buildIntakeSourceManifest,
   createIntakeSession,
+  deriveIntakeWorkItems,
   detectIntakeScenario,
   scanIntakeSourceTree,
 } from './intake';
@@ -220,6 +221,11 @@ export function buildImportedBundleAdapter(input: ImportedBundleAdapterInput): I
   }));
   session.status = keepPending ? 'pending-disambiguation' : 'reviewing';
   session.checks = buildIntakeSessionChecks(session);
+
+  const workItems = deriveIntakeWorkItems(session);
+  session.completionBlockers = workItems.completionBlockers;
+  session.reviewTasks = workItems.reviewTasks;
+
   session.supportedSources = scan.supportedSources;
   session.unsupportedSources = scan.unsupportedSources;
   session.ignoredPaths = scan.ignoredPaths;
