@@ -35,7 +35,7 @@ import type {
   ZoneType,
 } from '~/types/publisher';
 import { normalizeTokens, tokensToCssVariables } from './token-engine';
-import { STATIC_SHELL_LINKS } from './static-site-contract';
+import { REQUIRED_STATIC_OUTPUT_FILES, STATIC_SHELL_LINKS } from './static-site-contract';
 
 function escapeHtml(value: string) {
   return value
@@ -598,7 +598,7 @@ export function assemblePublisherProject(
     }),
   );
 
-  const checks = runPublisherChecks(state, registry);
+  const checks = [...runPublisherChecks(state, registry), ...buildTechnicalFileConsistencyChecks(files)];
   const checkFailDetails = checks
     .filter((report) => report.status === 'fail')
     .map((check) => `${check.name}: ${check.message}`);
@@ -673,4 +673,38 @@ export function assemblePublisherProject(
   files[PUBLISHER_STATE_FILE] = buildPublisherStateFile(state.project?.id, checks, context, build);
 
   return { files, checks, build, pipeline };
+}
+
+export function buildTechnicalFileConsistencyChecks(files: Record<string, string>): CheckReport[] {
+  const missingOutputFiles = REQUIRED_STATIC_OUTPUT_FILES.filter((requiredPath) => !(requiredPath in files));
+  const htmlFiles = Object.entries(files).filter(([path]) => path.endsWith('/index.html'));
+  const referenceMismatches: string[] = [];
+
+  htmlFiles.forEach(([path, html]) => {
+    if (!html.includes(`<link rel="manifest" href="${STATIC_SHELL_LINKS.manifestHref}" />`)) {
+      referenceMismatches.push(`${path}: missing manifest href ${STATIC_SHELL_LINKS.manifestHref}`);
+    }
+
+    if (!html.includes(`<link rel="stylesheet" href="${STATIC_SHELL_LINKS.cssHref}" />`)) {
+      referenceMismatches.push(`${path}: missing stylesheet href ${STATIC_SHELL_LINKS.cssHref}`);
+    }
+
+    if (!html.includes(`<script src="${STATIC_SHELL_LINKS.jsSrc}"></script>`)) {
+      referenceMismatches.push(`${path}: missing script src ${STATIC_SHELL_LINKS.jsSrc}`);
+    }
+  });
+
+  if (missingOutputFiles.length === 0 && referenceMismatches.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      gate: 'release',
+      name: 'technical-file-consistency',
+      status: 'fail',
+      message: 'Generated technical files or shell references are inconsistent with static contract.',
+      details: [...missingOutputFiles.map((path) => `missing file: ${path}`), ...referenceMismatches],
+    },
+  ];
 }

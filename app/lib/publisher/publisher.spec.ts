@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { PublisherBlockRegistry, publisherBlockRegistry } from './block-registry';
 import { describePublisherSlotEditing, loadPublisherState } from './contracts';
-import { assemblePublisherProject } from './assembler';
-import { runPublisherChecks } from './checker';
+import { assemblePublisherProject, buildTechnicalFileConsistencyChecks } from './assembler';
+import { derivePublisherPublishSemantics, runPublisherChecks } from './checker';
 import { buildCanonicalUrl, normalizeAbsoluteUrl } from './metadata';
 import { derivePublisherWorkflowState } from './status';
 import { buildIntakePageChecks } from './intake';
@@ -474,9 +474,30 @@ describe('publisher workflow', () => {
     expect(result.pipeline.publishContract.canPublish).toBe(true);
     expect(result.pipeline.publishContract.publishBlockers).toEqual([]);
     expect(result.pipeline.publishContract.artifactPath).toBe(PUBLISHER_PUBLISH_CONTRACT_FILE);
+    expect(
+      result.checks.some((report) => report.name === 'technical-file-consistency' && report.status === 'fail'),
+    ).toBe(false);
     expect(JSON.parse(result.files['/home/project/.bolt/publisher/state.json']).latestBuild.pipeline.jobs).toHaveLength(
       4,
     );
+  });
+
+  it('fails technical-file-consistency when required static output files are missing', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const mutatedFiles = { ...result.files };
+
+    delete mutatedFiles['/home/project/.bolt/publisher/generated/assets/js/main.js'];
+
+    const checks = buildTechnicalFileConsistencyChecks(mutatedFiles);
+    const semantics = derivePublisherPublishSemantics([...result.checks, ...checks]);
+
+    expect(checks.some((report) => report.name === 'technical-file-consistency' && report.status === 'fail')).toBe(
+      true,
+    );
+    expect(checks[0]?.details?.some((detail) => detail.includes('assets/js/main.js'))).toBe(true);
+    expect(semantics.canPublish).toBe(false);
+    expect(semantics.publishBlockers.some((value) => value.includes('technical-file-consistency'))).toBe(true);
   });
 
   it('preserves source heading hierarchy in generated html', () => {
