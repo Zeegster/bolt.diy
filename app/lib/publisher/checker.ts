@@ -1,4 +1,10 @@
-import { type CheckReport, type LoadedPublisherState, type PageContract, type SlotContract } from '~/types/publisher';
+import {
+  optionalPublisherZones,
+  type CheckReport,
+  type LoadedPublisherState,
+  type PageContract,
+  type SlotContract,
+} from '~/types/publisher';
 import type { PublisherBlockRegistry } from './block-registry';
 import { resolveEffectiveZoneContract, validatePublisherContractGuards } from './contracts';
 import {
@@ -77,6 +83,14 @@ function isExplicitExternalHref(value: string) {
 
 function isManagedAssetPublicPath(value: string) {
   return value.startsWith('/assets/');
+}
+
+function hasHeadingTags(value: string) {
+  return /<h[1-6][\s>]/i.test(value);
+}
+
+function containsArticleMarkup(value: string) {
+  return /<(p|h[1-6]|ul|ol|li|blockquote|table)\b/i.test(value);
 }
 
 function collectManagedAssetPublicPaths(state: LoadedPublisherState) {
@@ -281,6 +295,77 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
           pageId: page.id,
         }),
       );
+    }
+
+    const decorativeZones = ['header', ...optionalPublisherZones, 'footer'] as const;
+
+    for (const zone of decorativeZones) {
+      const effectiveZoneContract = resolveEffectiveZoneContract(page, zone, state.project.sharedShell);
+
+      if (!effectiveZoneContract) {
+        continue;
+      }
+
+      for (const slot of effectiveZoneContract.slots) {
+        const block = registry.getById(slot.blockId);
+
+        if (!block) {
+          continue;
+        }
+
+        const template = registry.getTemplate(slot.blockId);
+
+        if (typeof template === 'string' && hasHeadingTags(template)) {
+          reports.push(
+            createReport({
+              name: 'template-heading-injection',
+              status: 'fail',
+              message: `Block "${block.name}" injects heading tags in a decorative zone template.`,
+              details: [
+                `${page.name}/${slot.id}: ${block.templateFile}`,
+                'Keep heading semantics source-owned in content-zone prose instead of decorative templates.',
+              ],
+              pageId: page.id,
+              zone,
+            }),
+          );
+        }
+
+        const decorativeArticlePayload = Object.entries(slot.props).filter(([key, value]) => {
+          if (typeof value !== 'string') {
+            return false;
+          }
+
+          const normalizedValue = value.trim();
+
+          if (normalizedValue.length === 0) {
+            return false;
+          }
+
+          const loweredKey = key.toLowerCase();
+
+          if (loweredKey.includes('html')) {
+            return true;
+          }
+
+          return loweredKey.includes('body') && containsArticleMarkup(normalizedValue);
+        });
+
+        if (decorativeArticlePayload.length > 0) {
+          reports.push(
+            createReport({
+              name: 'decorative-zone-content-injection',
+              status: 'fail',
+              message: `Block "${block.name}" carries article payload in a decorative zone.`,
+              details: decorativeArticlePayload.map(
+                ([key, value]) => `${page.name}/${slot.id}/${key}: ${String(value).slice(0, 120)}`,
+              ),
+              pageId: page.id,
+              zone,
+            }),
+          );
+        }
+      }
     }
 
     for (const [zone, zoneContract] of Object.entries(page.zones) as Array<

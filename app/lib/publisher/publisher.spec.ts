@@ -308,6 +308,80 @@ describe('publisher workflow', () => {
     expect(checks.some((report) => report.status === 'fail')).toBe(false);
   });
 
+  it('template integrity diagnostics catch heading tags in decorative templates', () => {
+    const state = loadPublisherState(createPublisherFiles());
+    const registry = new PublisherBlockRegistry(publisherBlockRegistry.listAll(), {
+      ...publisherTemplates,
+      'site-header-basic.html': '<header><h2>Injected</h2></header>',
+    });
+    const checks = runPublisherChecks(state, registry);
+    const headingInjection = checks.find((report) => report.name === 'template-heading-injection');
+
+    expect(headingInjection?.status).toBe('fail');
+    expect(headingInjection?.pageId).toBe('home');
+    expect(headingInjection?.zone).toBe('header');
+  });
+
+  it('template integrity diagnostics flag decorative zones with html payload', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            beforeContent: {
+              slots: [
+                {
+                  id: 'banner',
+                  blockId: 'before-content-band',
+                  props: {
+                    eyebrow: 'Notice',
+                    message: 'Summary',
+                    html: '<p>Full article text should not live here.</p>',
+                  },
+                },
+              ],
+            },
+            content: {
+              slots: [
+                {
+                  id: 'hero',
+                  blockId: 'hero-centered',
+                  props: {
+                    eyebrow: 'Fast static delivery',
+                    title: 'Publisher Mode',
+                    body: 'Zone-first assembly for reusable static sites.',
+                    primaryCtaLabel: 'Start',
+                    primaryCtaHref: '/',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+    const payloadInjection = checks.find((report) => report.name === 'decorative-zone-content-injection');
+
+    expect(payloadInjection?.status).toBe('fail');
+    expect(payloadInjection?.pageId).toBe('home');
+    expect(payloadInjection?.zone).toBe('beforeContent');
+  });
+
   it('assembles preview-ready static output', () => {
     const state = loadPublisherState(createPublisherFiles());
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
