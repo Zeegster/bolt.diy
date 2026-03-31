@@ -16,6 +16,9 @@ import {
 } from '~/lib/publisher/intake-ui';
 import type { PublisherOrchestrationAction } from '~/lib/publisher/orchestration';
 
+const NO_CONSTRAINED_REPAIR_PROMPT =
+  'No constrained repair prompt available for this diagnostic. Resolve through source/template review first.';
+
 const statusOrder: PublisherProjectStatus[] = [
   'draft',
   'intake-review',
@@ -524,7 +527,7 @@ export function PublisherReleaseWorkspace({
                               +{check.details.length - 4} more detail item(s)
                             </div>
                           ) : null}
-                          {onQueueRepairIntent ? (
+                          {onQueueRepairIntent && repairIntent ? (
                             <button
                               type="button"
                               onClick={() => onQueueRepairIntent({ intent: repairIntent, check: check.sampleCheck })}
@@ -532,6 +535,9 @@ export function PublisherReleaseWorkspace({
                             >
                               Queue {repairIntent.action} prompt
                             </button>
+                          ) : null}
+                          {!repairIntent ? (
+                            <div className="mt-2 text-[11px] opacity-90">{NO_CONSTRAINED_REPAIR_PROMPT}</div>
                           ) : null}
                         </div>
                       );

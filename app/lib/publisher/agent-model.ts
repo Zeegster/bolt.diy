@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { PublisherActionFileScope, PublisherAgentActionContract, ZoneType, CheckReport } from '~/types/publisher';
 import { publisherZoneTypes } from '~/types/publisher';
-import { categorizePublisherDiagnostic, type PublisherDiagnosticCategory } from './intake-ui';
 import { buildRepairRegeneratePrompt } from './prompt-context';
 
 const zoneTypeSchema = z.enum(publisherZoneTypes);
@@ -50,26 +49,26 @@ function getCheckZone(check: CheckReport): ZoneType | undefined {
   return check.zone;
 }
 
-export function deriveRepairIntentFromCheck(check: CheckReport): PublisherAgentActionContract {
-  const category: PublisherDiagnosticCategory = categorizePublisherDiagnostic(check);
+const SUPPORTED_REPAIR_CHECKS = new Set([
+  'missing-page-title',
+  'missing-page-description',
+  'missing-page-h1',
+  'missing-page-sections',
+  'template-heading-injection',
+  'decorative-zone-content-injection',
+  'decorative-zone-primary-content',
+  'zone-link-policy',
+  'technical-file-consistency',
+  'table-media-wrapper',
+]);
+
+export function deriveRepairIntentFromCheck(check: CheckReport): PublisherAgentActionContract | null {
+  if (!SUPPORTED_REPAIR_CHECKS.has(check.name)) {
+    return null;
+  }
+
   const pageId = getCheckPageId(check);
   const zone = getCheckZone(check);
-
-  if (category === 'metadata' && pageId) {
-    return {
-      action: 'normalize',
-      pageId,
-    };
-  }
-
-  if (category === 'composition' && pageId && zone) {
-    return {
-      action: 'fill',
-      pageId,
-      zone,
-      slotId: check.name,
-    };
-  }
 
   return {
     action: 'repair',

@@ -1,5 +1,26 @@
 import type { PublisherAgentContext, SlotContract, ZoneType } from '~/types/publisher';
 
+function deriveRepairOriginFromCheckName(checkName: string): 'source' | 'template' | 'runtime' {
+  if (
+    checkName === 'missing-page-title' ||
+    checkName === 'missing-page-description' ||
+    checkName === 'missing-page-h1' ||
+    checkName === 'missing-page-sections'
+  ) {
+    return 'source';
+  }
+
+  if (
+    checkName === 'template-heading-injection' ||
+    checkName === 'decorative-zone-content-injection' ||
+    checkName === 'decorative-zone-primary-content'
+  ) {
+    return 'template';
+  }
+
+  return 'runtime';
+}
+
 export function buildPublisherRegeneratePrompt(context: PublisherAgentContext, instructions: string[]) {
   const lines = [
     'Work in Publisher Mode only.',
@@ -57,6 +78,8 @@ export function buildPageRegeneratePrompt(pageId: string) {
 }
 
 export function buildRepairRegeneratePrompt(checkName: string, pageId?: string, zone?: ZoneType) {
+  const repairOrigin = deriveRepairOriginFromCheckName(checkName);
+
   return buildPublisherRegeneratePrompt(
     {
       mode: 'publisher',
@@ -67,6 +90,7 @@ export function buildRepairRegeneratePrompt(checkName: string, pageId?: string, 
       'intent: repair',
       'targetFileScope: contracts-plus-checks',
       `repairCheck: ${checkName}`,
+      `repairOrigin: ${repairOrigin}`,
       pageId ? `repairPage: ${pageId}` : undefined,
       zone ? `repairZone: ${zone}` : undefined,
       'Repair only the failing publisher contract fields needed to resolve the named check.',

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { PublisherBlockRegistry, publisherBlockRegistry } from './block-registry';
 import { describePublisherSlotEditing, loadPublisherState } from './contracts';
@@ -38,6 +40,7 @@ import {
 import { REQUIRED_STATIC_OUTPUT_FILES, STATIC_SHELL_LINKS } from './static-site-contract';
 import type { PublisherBlockDefinition } from '~/types/publisher';
 import type { IntakeSourceSnapshot } from '~/types/publisher';
+import { PublisherReleaseWorkspace } from '~/components/publisher/PublisherReleaseWorkspace';
 
 function createHtmlDocument(html: string) {
   return new JSDOM(html).window.document;
@@ -1416,31 +1419,30 @@ describe('publisher workflow', () => {
 
   it('builds bounded repair prompt copy from release diagnostics', () => {
     const intent = deriveRepairIntentFromCheck({
-      name: 'missing-zone',
+      name: 'technical-file-consistency',
       status: 'fail',
-      message: 'Page contract is missing a required zone.',
+      message: 'Missing technical static file output.',
       pageId: 'home',
-      zone: 'content',
       gate: 'working',
     });
-    const prompt = buildPromptForRepairIntent(intent, {
-      name: 'missing-zone',
+    expect(intent).not.toBeNull();
+
+    const prompt = buildPromptForRepairIntent(intent!, {
+      name: 'technical-file-consistency',
       status: 'fail',
-      message: 'Page contract is missing a required zone.',
+      message: 'Missing technical static file output.',
       pageId: 'home',
-      zone: 'content',
       gate: 'working',
     });
 
     expect(intent).toEqual({
-      action: 'fill',
+      action: 'repair',
+      checkName: 'technical-file-consistency',
       pageId: 'home',
-      zone: 'content',
-      slotId: 'missing-zone',
     });
     expect(prompt).toContain('intent: repair');
-    expect(prompt).toContain('intentScope: fill missing contract fields for page "home" zone "content" only.');
-    expect(prompt).toContain('intentBoundaries: keep the repair inside the existing slot and zone contract surface.');
+    expect(prompt).toContain('repairOrigin: runtime');
+    expect(prompt).toContain('Repair only the failing publisher contract fields needed to resolve the named check.');
   });
 
   it('repair intent maps known diagnostics to constrained repair action', () => {
@@ -1977,5 +1979,69 @@ describe('publisher workflow', () => {
 
     expect(failureNames).toContain('link-policy');
     expect(failureNames).toContain('managed-asset-internal-path');
+  });
+
+  it('renders queue repair action for mapped constrained repair diagnostics', () => {
+    const html = renderToStaticMarkup(
+      createElement(PublisherReleaseWorkspace, {
+        status: 'failed',
+        workflow: {
+          status: 'failed',
+          step: 'release',
+          label: 'Release readiness',
+          summary: 'Release blockers detected.',
+          nextAction: 'Resolve release blockers.',
+        },
+        checks: [
+          {
+            gate: 'release',
+            name: 'technical-file-consistency',
+            status: 'fail',
+            message: 'Missing static files',
+            pageId: 'home',
+            details: ['Rule: required static files must exist', 'Fix: restore missing files'],
+          },
+        ],
+        buildHistory: [],
+        onQueueRepairIntent: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('Queue repair prompt');
+    expect(html).not.toContain(
+      'No constrained repair prompt available for this diagnostic. Resolve through source/template review first.',
+    );
+  });
+
+  it('renders constrained repair prompt fallback guidance for unmapped diagnostics', () => {
+    const html = renderToStaticMarkup(
+      createElement(PublisherReleaseWorkspace, {
+        status: 'failed',
+        workflow: {
+          status: 'failed',
+          step: 'release',
+          label: 'Release readiness',
+          summary: 'Release blockers detected.',
+          nextAction: 'Resolve release blockers.',
+        },
+        checks: [
+          {
+            gate: 'release',
+            name: 'metadata-completeness',
+            status: 'fail',
+            message: 'Missing metadata',
+            pageId: 'home',
+            details: ['Rule: metadata must be complete', 'Fix: fill required metadata fields'],
+          },
+        ],
+        buildHistory: [],
+        onQueueRepairIntent: () => undefined,
+      }),
+    );
+
+    expect(html).not.toContain('Queue repair prompt');
+    expect(html).toContain(
+      'No constrained repair prompt available for this diagnostic. Resolve through source/template review first.',
+    );
   });
 });

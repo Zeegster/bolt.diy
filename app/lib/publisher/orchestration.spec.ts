@@ -68,6 +68,8 @@ describe('publisher orchestration', () => {
     expect(sourcePrompt).toContain('repairOrigin: source');
     expect(templatePrompt).toContain('repairOrigin: template');
     expect(runtimePrompt).toContain('repairOrigin: runtime');
-    expect(runtimePrompt).toContain('Repair only the failing publisher contract fields needed to resolve the named check.');
+    expect(runtimePrompt).toContain(
+      'Repair only the failing publisher contract fields needed to resolve the named check.',
+    );
   });
 });

@@ -36,76 +36,63 @@ describe('publisher agent model', () => {
   });
 
   it('maps release diagnostics to deterministic repair intents', () => {
-    const metadataIntent = deriveRepairIntentFromCheck({
-      name: 'metadata-completeness',
+    const sourceIntent = deriveRepairIntentFromCheck({
+      name: 'missing-page-title',
       status: 'fail',
-      message: 'Page "Home" is missing release-grade metadata.',
+      message: 'Page "Home" is missing a title.',
       pageId: 'home',
-      gate: 'release',
-    });
-    const compositionIntent = deriveRepairIntentFromCheck({
-      name: 'missing-zone',
-      status: 'fail',
-      message: 'Page contract is missing a required zone.',
-      pageId: 'home',
-      zone: 'content',
       gate: 'working',
     });
-    const outputIntent = deriveRepairIntentFromCheck({
-      name: 'broken-internal-link',
+    const templateIntent = deriveRepairIntentFromCheck({
+      name: 'decorative-zone-content-injection',
       status: 'fail',
-      message: 'Generated output references an unknown internal path.',
+      message: 'Decorative zone carries article html.',
+      pageId: 'home',
+      zone: 'beforeContent',
+      gate: 'release',
+    });
+    const outputIntent = deriveRepairIntentFromCheck({
+      name: 'technical-file-consistency',
+      status: 'fail',
+      message: 'Generated output is missing required technical files.',
       pageId: 'home',
       gate: 'release',
     });
 
-    expect(metadataIntent).toEqual({ action: 'normalize', pageId: 'home' });
-    expect(compositionIntent).toEqual({ action: 'fill', pageId: 'home', zone: 'content', slotId: 'missing-zone' });
+    expect(sourceIntent).toEqual({ action: 'repair', checkName: 'missing-page-title', pageId: 'home' });
+    expect(templateIntent).toEqual({
+      action: 'repair',
+      checkName: 'decorative-zone-content-injection',
+      pageId: 'home',
+      zone: 'beforeContent',
+    });
     expect(outputIntent).toEqual({
       action: 'repair',
-      checkName: 'broken-internal-link',
+      checkName: 'technical-file-consistency',
       pageId: 'home',
       zone: undefined,
     });
-    expect(resolvePublisherActionFileScope(metadataIntent)).toBe('contracts-only');
-    expect(resolvePublisherActionFileScope(outputIntent)).toBe('contracts-plus-checks');
+    expect(resolvePublisherActionFileScope(sourceIntent ?? undefined)).toBe('contracts-plus-checks');
+    expect(resolvePublisherActionFileScope(outputIntent ?? undefined)).toBe('contracts-plus-checks');
     expect(
-      buildPromptForRepairIntent(outputIntent, {
-        name: 'broken-internal-link',
+      buildPromptForRepairIntent(outputIntent!, {
+        name: 'technical-file-consistency',
         status: 'fail',
-        message: 'Generated output references an unknown internal path.',
+        message: 'Generated output is missing required technical files.',
         pageId: 'home',
         gate: 'release',
       }),
     ).toContain('intentBoundaries: resolve only the named diagnostic without widening publisher output scope.');
   });
 
-  it('falls back to bounded repair intents when scoped metadata or composition targets are missing', () => {
-    const metadataWithoutPage = deriveRepairIntentFromCheck({
+  it('returns null for diagnostics outside constrained repair mapping', () => {
+    const unsupported = deriveRepairIntentFromCheck({
       name: 'metadata-completeness',
       status: 'fail',
       message: 'Project metadata is incomplete.',
       gate: 'release',
     });
-    const compositionWithoutZone = deriveRepairIntentFromCheck({
-      name: 'missing-zone',
-      status: 'fail',
-      message: 'Page contract is missing a required zone.',
-      pageId: 'home',
-      gate: 'working',
-    });
 
-    expect(metadataWithoutPage).toEqual({
-      action: 'repair',
-      checkName: 'metadata-completeness',
-      pageId: undefined,
-      zone: undefined,
-    });
-    expect(compositionWithoutZone).toEqual({
-      action: 'repair',
-      checkName: 'missing-zone',
-      pageId: 'home',
-      zone: undefined,
-    });
+    expect(unsupported).toBeNull();
   });
 });
