@@ -124,6 +124,67 @@ function collectSlotNarrativePayload(props: SlotContract['props']) {
     .filter((value) => value.length > 0);
 }
 
+function getAttributeValue(attributes: string, name: string) {
+  const match = new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(attributes);
+  return match?.[2] ?? match?.[3] ?? match?.[4] ?? null;
+}
+
+function classIncludes(attributes: string, className: string) {
+  const classValue = getAttributeValue(attributes, 'class');
+
+  if (!classValue) {
+    return false;
+  }
+
+  return classValue
+    .split(/\s+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .includes(className);
+}
+
+function hasUnwrappedTableMarkup(value: string) {
+  const withoutWrappedTables = value.replace(
+    /<div\b[^>]*class\s*=\s*("([^"]*\bpublisher-table-scroll\b[^"]*)"|'([^']*\bpublisher-table-scroll\b[^']*)')[^>]*>[\s\S]*?<\/div>/gi,
+    '',
+  );
+
+  return /<table\b/i.test(withoutWrappedTables);
+}
+
+function hasTableWithoutPublisherClass(value: string) {
+  let hasViolation = false;
+
+  value.replace(/<table\b([^>]*)>/gi, (_tableMatch, rawAttributes: string) => {
+    if (!classIncludes(rawAttributes ?? '', 'publisher-table')) {
+      hasViolation = true;
+    }
+
+    return _tableMatch;
+  });
+
+  return hasViolation;
+}
+
+function hasImageMissingNormalization(value: string) {
+  let hasViolation = false;
+
+  value.replace(/<img\b([^>]*?)(\/?)>/gi, (_imageMatch, rawAttributes: string) => {
+    const attributes = rawAttributes ?? '';
+    const hasMediaClass = classIncludes(attributes, 'publisher-rich-media');
+    const loading = getAttributeValue(attributes, 'loading')?.toLowerCase();
+    const decoding = getAttributeValue(attributes, 'decoding')?.toLowerCase();
+
+    if (!hasMediaClass || loading !== 'lazy' || decoding !== 'async') {
+      hasViolation = true;
+    }
+
+    return _imageMatch;
+  });
+
+  return hasViolation;
+}
+
 function hasMeaningfulProsePayload(payloads: string[]) {
   if (payloads.length === 0) {
     return false;
@@ -448,6 +509,53 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
 
         if (!block) {
           continue;
+        }
+
+        const richPayloadViolations: string[] = [];
+
+        for (const [key, rawValue] of Object.entries(slot.props)) {
+          if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+            continue;
+          }
+
+          const loweredKey = key.toLowerCase();
+
+          if (!['html', 'body', 'content'].includes(loweredKey)) {
+            continue;
+          }
+
+          if (/<table\b/i.test(rawValue)) {
+            if (hasUnwrappedTableMarkup(rawValue)) {
+              richPayloadViolations.push(
+                `${page.name}/${slot.id}/${key}: table markup must be wrapped in .publisher-table-scroll`,
+              );
+            }
+
+            if (hasTableWithoutPublisherClass(rawValue)) {
+              richPayloadViolations.push(
+                `${page.name}/${slot.id}/${key}: table markup must include class publisher-table`,
+              );
+            }
+          }
+
+          if (/<img\b/i.test(rawValue) && hasImageMissingNormalization(rawValue)) {
+            richPayloadViolations.push(
+              `${page.name}/${slot.id}/${key}: image markup must include publisher-rich-media class and lazy/async attributes`,
+            );
+          }
+        }
+
+        if (richPayloadViolations.length > 0) {
+          reports.push(
+            createReleaseReport({
+              name: 'table-media-wrapper',
+              status: 'fail',
+              message: `Block "${block.name}" violates rich-content table/media wrapper contract.`,
+              details: richPayloadViolations,
+              pageId: page.id,
+              zone,
+            }),
+          );
         }
 
         const assetWarnings = Object.entries(slot.props)

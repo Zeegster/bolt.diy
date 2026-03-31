@@ -226,6 +226,9 @@ a { color: inherit; text-decoration: none; }
 .publisher-hero__title { font-size: clamp(2.5rem, 5vw, 4.5rem); line-height: 0.95; margin: 0.5rem 0 1rem; font-weight: 700; }
 .publisher-hero__body, .publisher-richtext { font-size: 1.05rem; line-height: 1.7; color: var(--color-text); }
 .publisher-eyebrow { display: inline-block; color: var(--color-primary); text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.8rem; font-weight: 700; }
+.publisher-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.publisher-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.publisher-rich-media { max-width: 100%; height: auto; display: block; }
 .publisher-button {
   display: inline-flex;
   align-items: center;
