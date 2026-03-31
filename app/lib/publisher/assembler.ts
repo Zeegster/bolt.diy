@@ -36,6 +36,7 @@ import type {
 } from '~/types/publisher';
 import { normalizeTokens, tokensToCssVariables } from './token-engine';
 import { REQUIRED_STATIC_OUTPUT_FILES, STATIC_SHELL_LINKS } from './static-site-contract';
+import { normalizeRichContentHtml } from './rich-content';
 
 function escapeHtml(value: string) {
   return value
@@ -72,7 +73,7 @@ function renderTemplateString(template: string, slot: SlotContract) {
     const key = rest.join(':');
     const rawValue = scope === 'slot' ? slot.props[key] : '';
     const stringValue = rawValue === undefined || rawValue === null ? '' : String(rawValue);
-    const formatted = key === 'html' ? stringValue : escapeHtml(stringValue);
+    const formatted = key === 'html' ? normalizeRichContentHtml(stringValue) : escapeHtml(stringValue);
 
     result += formatted;
     cursor = end + 2;
