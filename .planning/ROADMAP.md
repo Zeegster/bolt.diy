@@ -2,138 +2,86 @@
 
 ## Overview
 
-The codebase already contains a real publisher foundation inside a larger AI workbench. The roadmap below turns that foundation into a deterministic production line: first tighten contracts and guardrails, then make operator review and release reliable, then harden assets/runtime/validation, and only after that add batch-level throughput features.
+Milestone `v1.1` focuses on the gap between the current publisher foundation and a truly production-safe fast-sites intake flow. The goal is not broader throughput yet; the goal is proving that one site can move from imperfect source pack to clean release-ready static output under the shared content, heading, zone, and deployment rules. Once that contract is stable, throughput and orchestration work will land on top of a safer base.
 
 ## Phases
 
-- [x] **Phase 1: Contract Safety and Registry v2** - Finish the rules that make publisher output predictable before more workflow surface is added. Completed 2026-03-30.
-- [x] **Phase 2: Operator Review Workflow** - Turn the current review workbench into an explicit intake/review/release operator flow. Completed 2026-03-30.
-- [x] **Phase 3: Deterministic Assets and Provenance** - Make asset handling and generated outputs stable enough for release operations. (completed 2026-03-30)
-- [x] **Phase 4: Release Pipeline and Quality Gates** - Separate assemble/optimize/check/publish and enforce release-grade verification. (completed 2026-03-30)
-- [x] **Phase 04.1: Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract** - Bridge imported bundles into deterministic publisher contracts with strict intake boundaries. (completed 2026-03-30)
-- [x] **Phase 5: Agent Operating Model** - Lock down how agents interact with publisher files, blocks, contracts, and repair loops. (completed 2026-03-30)
-- [x] **Phase 6: Batch Readiness** - Add queue/inbox, throughput visibility, and server-ready seams after the single-operator workflow is stable. (completed 2026-03-30)
+- [x] **Phase 7: Complete Manual Intake Flow** - Turn the existing intake pieces into one operator-complete flow with explicit blockers, fixes, and completion semantics.
+- [ ] **Phase 8: Enforce Content and Heading Integrity** - Remove remaining template/pipeline behaviors that inject meaning or headings outside the source-of-truth document contract.
+- [ ] **Phase 9: Align Static-Site Project Contract** - Make generated artifacts and project structure match the shared fast-sites rules for links, metadata consistency, tables/media, and static deploy shape.
+- [ ] **Phase 10: Rules Diagnostics and End-to-End Validation** - Add operator-facing diagnostics and release checks that prove the full manual intake flow under the new rules.
 
 ## Phase Details
 
-### Phase 1: Contract Safety and Registry v2
-**Goal**: Publisher contracts and block rules become strict enough that invalid site compositions are caught early and metadata ownership is explicit.
-**Depends on**: Nothing (first phase)
-**Requirements**: [PLAT-01, PLAT-02, CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, META-01, META-02]
+### Phase 7: Complete Manual Intake Flow
+**Goal**: Turn current intake primitives into a first-class workflow that can carry one real site from imported source pack to contract-complete review state.
+**Depends on**: Phase 6
+**Requirements**: [INTK-05, INTK-06, INTK-07]
 **Success Criteria** (what must be TRUE):
-  1. Publisher contracts define required zones and reject incompatible block placements before build.
-  2. Registry metadata supports versioning, allowed zones, prop schema expectations, and deprecation signals without breaking existing blocks.
-  3. Page metadata ownership is enforced so blocks and agents cannot override app-owned `head` concerns.
+  1. Operator can import a supported source pack and drive it through explicit intake states until all blockers are either resolved or clearly surfaced.
+  2. Unsupported, partial, or ambiguous source structures are visible as concrete review tasks instead of hidden degradation.
+  3. The resulting project state is sufficient to hand off into contract/release review without raw file surgery.
 **Plans**: 3 plans
 
 Plans:
-- [x] 01-01: Audit current contract/registry implementation and land registry v2 compatibility model.
-- [x] 01-02: Add authoring/save/build guardrails for zones, required props, and forbidden metadata overrides.
-- [x] 01-03: Align publisher prompts, docs, and diagnostics with the enforced ownership model.
+- [x] 07-01: Audit current manual intake path and define canonical completion/blocker states for one-site intake.
+- [x] 07-02: Wire missing operator actions and persisted review state needed to finish intake without raw runtime edits.
+- [x] 07-03: Prove the manual intake flow on representative source-pack fixtures and close the most dangerous gaps.
 
-### Phase 2: Operator Review Workflow
-**Goal**: Operator gets a clean production workflow for intake review, metadata repair, block review, and release readiness.
-**Depends on**: Phase 1
-**Requirements**: [INTK-01, INTK-02, INTK-03, INTK-04, OPER-01, OPER-02, OPER-03]
+### Phase 8: Enforce Content and Heading Integrity
+**Goal**: Guarantee that publisher output preserves source meaning and heading hierarchy instead of letting templates or normalizers invent semantic structure.
+**Depends on**: Phase 7
+**Requirements**: [CONT-06, CONT-07, CONT-08]
 **Success Criteria** (what must be TRUE):
-  1. Intake, review, and release stages are visible as explicit workflow states in the UI.
-  2. Operator can resolve ambiguity, repair source metadata, and understand current readiness without reading raw implementation files.
-  3. Source, contracts, and generated output can be compared through purpose-built review surfaces.
+  1. Approved source content remains the only origin of page headings and primary semantic text unless the operator edits approved source-of-truth fields.
+  2. Templates and pipeline transforms cannot silently inject extra `h1`/`h2`/`h3` or content-bearing sections.
+  3. Decorative zones are enforced as decorative/supporting surfaces and do not steal core page meaning from `content`.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 08-01: Audit and fix template-layer heading/content violations against fast-sites rules.
+- [ ] 08-02: Add pipeline and contract guards that reject semantic drift introduced after intake.
+- [ ] 08-03: Cover heading/content preservation with fixtures and diagnostics.
+
+### Phase 9: Align Static-Site Project Contract
+**Goal**: Make Bolt publisher output conform to the shared fast-sites project contract for deployable static bundles.
+**Depends on**: Phase 8
+**Requirements**: [STAT-01, STAT-02, STAT-03]
+**Success Criteria** (what must be TRUE):
+  1. Generated site shell, internal linking policies by zone, and technical output shape follow the shared static-sites rules.
+  2. Public URLs, internal links, canonical data, sitemap data, and technical files stay consistent for the chosen URL mode.
+  3. Tables, figures, and media are rendered through stable wrappers and attributes that preserve mobile readability and layout stability.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 09-01: Define the shared project/output contract Bolt must satisfy for fast-sites delivery.
+- [ ] 09-02: Align generator output for link-zone policy, URL mode consistency, and technical file expectations.
+- [ ] 09-03: Normalize table/media output and supporting checks to the shared contract.
+
+### Phase 10: Rules Diagnostics and End-to-End Validation
+**Goal**: Expose fast-sites rule failures clearly to the operator and prove the updated flow with end-to-end validation.
+**Depends on**: Phase 9
+**Requirements**: [OPER-05, OPER-06, OPER-07, VAL-05, VAL-06]
+**Success Criteria** (what must be TRUE):
+  1. Operator can see whether an issue comes from source input, template choice, or runtime generation, and has constrained repair paths for each.
+  2. Release readiness checks fail on fast-sites rule violations with actionable diagnostics.
+  3. At least one representative end-to-end intake fixture proves the new flow from source pack to release-ready output.
 **Plans**: 4 plans
 
 Plans:
-- [x] 02-01: Stabilize intake state machine and visible stage/status indicators across publisher UI.
-- [x] 02-02: Build source-of-truth editing surfaces for markdown/source metadata and extracted content repair.
-- [x] 02-03: Add source -> contract -> output diff surfaces and grouped diagnostics by severity.
-- [x] 02-04: Finish constrained block editing UX for risky fields and invalid composition prevention.
-
-### Phase 3: Deterministic Assets and Provenance
-**Goal**: Generated site assets and build outputs become traceable, normalized, and safe for repeated production use.
-**Depends on**: Phase 2
-**Requirements**: [META-03, BUILD-01, BUILD-02, BUILD-03]
-**Success Criteria** (what must be TRUE):
-  1. Asset ingestion normalizes naming, deduplicates by hash, and captures width/height metadata where needed.
-  2. Generated files have stable public paths, deterministic manifests, and build provenance.
-  3. Operator can inspect which inputs and contract state produced the current artifact set.
-**Plans**: 3 plans
-
-Plans:
-- [x] 03-01: Implement asset ingestion helpers, hashing, path normalization, and image metadata capture.
-- [x] 03-02: Extend assembler/build outputs with deterministic manifest and provenance records.
-- [x] 03-03: Surface artifact and build-history data in release-facing UI.
-
-### Phase 4: Release Pipeline and Quality Gates
-**Goal**: Publisher flow becomes a proper release pipeline with optimization, validation, and publish contract boundaries.
-**Depends on**: Phase 3
-**Requirements**: [BUILD-04, OPER-04, VAL-01, VAL-02, VAL-03, VAL-04, PUB-01, PUB-02, PUB-03]
-**Success Criteria** (what must be TRUE):
-  1. Assemble, optimize, check, and publish are explicit stages with diagnostics and failure handling.
-  2. Release checks block publish when critical metadata, links, asset, or runtime issues exist.
-  3. CI and test coverage meaningfully exercise publisher release behavior instead of only local happy paths.
-**Plans**: 4 plans
-
-Plans:
-- [x] 04-01: Separate assemble -> optimize -> check -> publish stages in code and diagnostics.
-- [x] 04-02: Expand release checks for links, assets, sitemap/robots/schema, and publish blockers.
-- [x] 04-03: Formalize export/publish contract, artifact shape, and rollback or rebuild strategy.
-- [x] 04-04: Expand integration/tests/CI coverage for release behavior and future Lighthouse gating.
-
-### Phase 04.1: Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract (INSERTED)
-**Goal**: Bridge external HTML/Markdown intake into deterministic publisher contracts with strict guardrails and batch-safe metadata normalization.
-**Depends on**: Phase 4
-**Requirements**: [INTK-01, INTK-04, META-03, BUILD-01, BUILD-02, BUILD-03]
-**Success Criteria** (what must be TRUE):
-  1. Intake adapter accepts `html-bundle`, `markdown`, and `content-source` families, resolves disambiguation deterministically, and persists recoverable intake sessions.
-  2. Guardrails enforce source ownership boundaries (no app-owned head/runtime overrides), heading integrity, and block unsafe freeform output before contract generation.
-  3. Batch normalize contract (`pages[]: slug/title/description/heading/source`) is implemented for unresolved metadata and integrates with intake review workflows for `10-20` sites/day operations.
-**Plans**: 3 plans
-
-Plans:
-- [x] 04.1-01: Define and validate deterministic normalize contracts + strict markdown/html guardrails.
-- [x] 04.1-02: Implement site-builder intake adapter (source-family detection, assets/links normalization, session persistence).
-- [x] 04.1-03: Wire batch metadata normalization loop and fixture-based release checks for imported packs.
-
-### Phase 5: Agent Operating Model
-**Goal**: Agent behavior in publisher mode becomes explicit, constrained, and repair-oriented instead of generative-by-default.
-**Depends on**: Phase 04.1
-**Requirements**: [AGNT-01, AGNT-02, AGNT-03, AGNT-04]
-**Success Criteria** (what must be TRUE):
-  1. Agent prompts, docs, and runtime checks encode reserved ownership and forbidden outputs.
-  2. Agent actions map cleanly to normalize/map/fill/repair workflows.
-  3. Diagnostics from release gates can be fed back into the repair loop without widening scope.
-**Plans**: 3 plans
-
-Plans:
-- [x] 05-01-PLAN.md — Tighten prompt ownership boundaries and reserved publisher file scope.
-- [x] 05-02-PLAN.md — Add typed `normalize|map|fill|repair` action contract and runtime publisher write guard.
-- [x] 05-03-PLAN.md — Wire release diagnostics to confirmation-gated repair prompts.
-
-### Phase 6: Batch Readiness
-**Goal**: After the single-operator pipeline is stable, the system gains queue, metrics, and orchestration seams needed for `10-20` sites/day.
-**Depends on**: Phase 5
-**Requirements**: [BATCH-01, BATCH-02, BATCH-03, QUAL-01, QUAL-02]
-**Success Criteria** (what must be TRUE):
-  1. Operator can manage many sites from a queue/inbox with clear readiness and failure visibility.
-  2. The system reports throughput and failure categories useful for production tuning.
-  3. Interfaces exist for later server-backed orchestration without replacing the internal assembler.
-**Plans**: 3 plans
-
-Plans:
-- [x] 06-01: Build intake queue/inbox model with readiness, ambiguity, and stuck-state signals.
-- [x] 06-02: Add throughput, failure-bucket, and operator-efficiency metrics.
-- [x] 06-03: Prepare server-ready orchestration seams and optional Lighthouse-based release enhancements.
+- [ ] 10-01: Add fast-sites diagnostics taxonomy and source/template/runtime attribution in the operator UI.
+- [ ] 10-02: Connect constrained repair actions to the new diagnostics without widening agent scope.
+- [ ] 10-03: Expand release gates for fast-sites invariants and rule-specific blockers.
+- [ ] 10-04: Land end-to-end fixture coverage for the complete manual intake flow.
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6
+Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract Safety and Registry v2 | 3/3 | Complete | 2026-03-30 |
-| 2. Operator Review Workflow | 4/4 | Complete | 2026-03-30 |
-| 3. Deterministic Assets and Provenance | 3/3 | Complete   | 2026-03-30 |
-| 4. Release Pipeline and Quality Gates | 4/4 | Complete    | 2026-03-30 |
-| 4.1 Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract | 3/3 | Complete   | 2026-03-30 |
-| 5. Agent Operating Model | 3/3 | Complete   | 2026-03-30 |
-| 6. Batch Readiness | 3/3 | Complete   | 2026-03-30 |
+| 7. Complete Manual Intake Flow | 3/3 | Complete | 2026-03-31 |
+| 8. Enforce Content and Heading Integrity | 0/3 | Not started | — |
+| 9. Align Static-Site Project Contract | 0/3 | Not started | — |
+| 10. Rules Diagnostics and End-to-End Validation | 0/4 | Not started | — |

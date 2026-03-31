@@ -1,71 +1,58 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v1.1
 milestone_name: milestone
-status: completed
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-03-30T15:37:35.622Z"
-last_activity: 2026-03-30
+status: active
+stopped_at: Phase 07 complete; ready to start Phase 08
+last_updated: "2026-03-31T03:35:00.000Z"
+last_activity: 2026-03-31 -- Phase 07 verification passed
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 23
-  completed_plans: 23
-  percent: 100
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 13
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-30)
+See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** One operator must be able to move a site from source intake to release-ready output through a deterministic pipeline with minimal ambiguity and no manual `head` or runtime assembly work.
-**Current focus:** Milestone closeout after completing Phases 04.1, 05, and 06
+**Current focus:** Phase 08 — enforce-content-and-heading-integrity
 
 ## Current Position
 
-Phase: 06
-Plan: Complete
-Status: Milestone complete
-Last activity: 2026-03-30
+Phase: 08 (enforce-content-and-heading-integrity) — READY TO PLAN
+Plan: 0 of 3
+Status: Phase 07 complete, verification passed
+Last activity: 2026-03-31 -- Phase 07 verification passed
 
-Progress: [██████████] 100%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
-- Average duration: Summary-backed
-- Total execution time: Milestone complete
+- Total plans completed in current milestone: 3
+- Average duration: ~26 min/plan (Phase 07)
+- Total execution time: Phase 07 completed
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 04.1 | 3 | Complete | Summary-backed |
-| 05 | 3 | Complete | Summary-backed |
-| 06 | 3 | Complete | Summary-backed |
+| 07 | 3 | Complete | 2026-03-31 |
+| 08 | 0 | Not started | — |
+| 09 | 0 | Not started | — |
+| 10 | 0 | Not started | — |
 
 **Recent Trend:**
 
-- Last 5 plans: 05-02, 05-03, 06-01, 06-02, 06-03
-- Trend: Complete
-
-| Phase 04 P01 | 9 min | 4 tasks | 5 files |
-| Phase 04 P02 | 5 min | 4 tasks | 5 files |
-| Phase 04 P03 | 8 min | 4 tasks | 6 files |
-| Phase 04 P04 | 5 min | 4 tasks | 8 files |
-| Phase 04.1 P01 | Completed | 3 tasks | Summary-backed |
-| Phase 04.1 P02 | Completed | 3 tasks | Summary-backed |
-| Phase 04.1 P03 | Completed | 3 tasks | Summary-backed |
-| Phase 05 P01 | Completed | 3 tasks | Summary-backed |
-| Phase 05 P02 | Completed | 3 tasks | Summary-backed |
-| Phase 05 P03 | Completed | 3 tasks | Summary-backed |
-| Phase 06 P01 | Completed | 3 tasks | Summary-backed |
-| Phase 06 P02 | Completed | 3 tasks | Summary-backed |
-| Phase 06 P03 | Completed | 3 tasks | Summary-backed |
+- Last milestone completed: v1.0 on 2026-03-30
+- Trend: Reset for new milestone
 
 ## Accumulated Context
 
@@ -81,21 +68,26 @@ Recent decisions affecting current work:
 - Phase 02 completed: workflow states, source repair UX, grouped diagnostics, and constrained block-editing guidance now form the operator review loop.
 - [Phase 05]: Agent repair loops now stay confirmation-gated and inside typed normalize|map|fill|repair contracts.
 - [Phase 06]: Batch readiness now derives queue, metrics, and orchestration seams from existing publisher storage instead of adding a second source of truth.
+- [Milestone v1.1]: Prioritize full intake correctness and fast-sites alignment before multi-provider throughput or heavy orchestration work.
+- [Phase 07]: Manual intake flow now has explicit resolve/apply/handoff actions with strict persisted-state validation and verified canonical vs blocked fixture behavior.
 
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 04: Publisher intake adapter + markdown/html guardrails + deterministic batch normalize contract (URGENT)
+- Phase numbering continues from prior milestone; new milestone starts at Phase 7.
 
 ### Pending Todos
 
-None.
+- Validate that templates and intake pipeline never inject semantic headings not present in source content (Phase 08).
+- Align generated output with static-site project contract and release diagnostics (Phases 09-10).
 
 ### Blockers/Concerns
 
-None at milestone closeout.
+- Heading/content integrity rules are still pending enforcement hardening in Phase 08.
+- Static-site contract + release diagnostics remain pending for Phases 09-10.
 
 ## Session Continuity
 
-Last session: 2026-03-30T15:35:57.495Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-03-31T00:00:00.000Z
+Stopped at: Phase 07 complete; Phase 08 not started
 Resume file: None

@@ -1,82 +1,50 @@
 # Requirements: bolt.diy Publisher Factory
 
-**Defined:** 2026-03-30
+**Defined:** 2026-03-31
 **Core Value:** One operator must be able to move a site from source intake to release-ready output through a deterministic pipeline with minimal ambiguity and no manual `head` or runtime assembly work.
 
 ## v1 Requirements
 
-### Existing Platform
+### Manual Intake Completion
 
-- [x] **PLAT-01**: `Publisher Mode` remains isolated from the default bolt coding workflow and does not break the main chat/workbench experience.
-- [x] **PLAT-02**: Publisher state, files, prompts, and build artifacts stay inside reserved publisher paths and contracts.
+- [x] **INTK-05**: Operator can complete one full manual intake flow from imported source pack to release-ready project state without editing raw runtime output files.
+- [x] **INTK-06**: Intake review explicitly tracks unresolved source gaps, operator fixes, and completion blockers until the project reaches a contract-complete state.
+- [x] **INTK-07**: Intake supports the canonical fast-sites source shapes needed for current delivery work and makes unsupported or partial packs explicit instead of silently degrading.
 
-### Intake and Source Normalization
+### Content and Heading Integrity
 
-- [x] **INTK-01**: Operator can import document-only source packs and template-plus-documents source packs.
-- [x] **INTK-02**: Intake identifies ambiguity in family/template/home-page selection and surfaces it as an explicit review step.
-- [x] **INTK-03**: Source metadata and extracted content can be corrected inline without losing source-of-truth visibility.
-- [x] **INTK-04**: Intake sessions, source manifests, and operator edits are persisted and recoverable.
+- [ ] **CONT-06**: Publisher pipeline preserves original textual content and heading hierarchy from intake documents unless the operator explicitly edits the approved source-of-truth fields.
+- [ ] **CONT-07**: Templates, normalizers, and generated blocks do not introduce semantic headings or primary content that are absent from the approved source documents.
+- [ ] **CONT-08**: Decorative zones remain decorative and cannot absorb core page meaning that belongs to the main content zone.
 
-### Contracts and Block System
+### Static-Site Rules Alignment
 
-- [x] **CONT-01**: Project, theme, page, reference, and checks contracts remain machine-parseable and deterministic.
-- [x] **CONT-02**: Every page enforces required zones `header`, `content`, and `footer`.
-- [x] **CONT-03**: Block registry supports schema versioning, allowed zones, prop schemas, and deprecation metadata without breaking legacy manifests.
-- [x] **CONT-04**: Invalid block-to-zone placements and missing required props are prevented or surfaced before build.
-- [x] **CONT-05**: Page metadata fields are owned by contracts and cannot be overridden by blocks.
+- [ ] **STAT-01**: Generated project output follows the shared static-sites contract for page shell, internal linking policies by zone, and clean deployable static bundle structure.
+- [ ] **STAT-02**: Output metadata, URLs, canonical behavior, sitemap data, and technical files remain mutually consistent for the chosen public URL mode.
+- [ ] **STAT-03**: Tables and media are emitted through stable wrappers and attributes that satisfy mobile readability and layout-stability rules.
 
-### Metadata and Runtime Ownership
+### Operator Review and Repair
 
-- [x] **META-01**: The application generates and owns `<head>`, canonical URLs, robots, sitemap, schema JSON-LD, favicon/meta image tags, and language defaults.
-- [x] **META-02**: `title`, `description`, and `h1` come only from intake documents and approved contract edits.
-- [x] **META-03**: Generated output includes deterministic metadata, provenance, and stable artifact fingerprints.
+- [ ] **OPER-05**: Operator UI exposes purpose-built diagnostics for fast-sites rule violations, including heading drift, content injection, linking misuse, and unsupported source structure.
+- [ ] **OPER-06**: Operator can resolve document/template/rules mismatches through constrained review actions instead of ad hoc freeform generation.
+- [ ] **OPER-07**: Review surfaces make it obvious which issue came from source input, which came from template choice, and which came from generation/runtime layers.
 
-### Build and Assets
+### Validation and Readiness
 
-- [x] **BUILD-01**: Output is assembled only from approved contracts through a one-way generation path.
-- [x] **BUILD-02**: Generated files use normalized public paths and stable file mapping.
-- [x] **BUILD-03**: Asset ingestion normalizes names, hashes duplicates, and captures dimensions needed for rendering and image policy checks.
-- [x] **BUILD-04**: Build pipeline supports a distinct optimize/check stage after assembly.
-
-### Operator Workflow
-
-- [x] **OPER-01**: UI exposes a clear project status machine: `draft -> intake-review -> contract-ready -> release-ready -> published -> failed`.
-- [x] **OPER-02**: Operator can see grouped `working` and `release` diagnostics with severity and actionable detail.
-- [x] **OPER-03**: Operator can inspect the relationship between source, contracts, and generated output during review.
-- [x] **OPER-04**: Operator can access build history, generated entry points, and release readiness in one workflow.
-
-### Agent Layer
-
-- [x] **AGNT-01**: Agents work only on approved publisher files and contracts.
-- [x] **AGNT-02**: Agents are limited to `normalize`, `map`, `fill`, and `repair` actions.
-- [x] **AGNT-03**: Agents cannot create new block types, new zones, or freeform SEO/runtime output unless explicitly requested.
-- [x] **AGNT-04**: Agent prompts and context clearly communicate reserved ownership boundaries and failure-repair loops.
-
-### Validation and Release Gates
-
-- [x] **VAL-01**: Working checks support day-to-day operator review without blocking draft iteration.
-- [x] **VAL-02**: Release checks block publish when metadata completeness, canonical URLs, robots/sitemap consistency, internal links, or asset policy fail.
-- [x] **VAL-03**: Typecheck, tests, and CI linting are part of the standard release discipline.
-- [x] **VAL-04**: Publisher flows have integration tests covering intake, contracts, assembly, and release checks.
-
-### Publish and History
-
-- [x] **PUB-01**: Export/publish flow has a documented artifact contract, deploy entrypoints, and build metadata format.
-- [x] **PUB-02**: Publish history records enough provenance to inspect what source and contract state produced an artifact.
-- [x] **PUB-03**: System can support rollback-friendly artifact retention or reproducible rebuilds.
+- [ ] **VAL-05**: Release readiness checks fail when generated output violates fast-sites content, heading, link-zone, or static-bundle invariants.
+- [ ] **VAL-06**: The project includes at least one representative end-to-end fixture proving a full manual intake flow under the new rules.
 
 ## v2 Requirements
 
-### Batch Operations
+### Throughput and Orchestration
 
-- **BATCH-01**: Operator can manage many sites from an intake queue/inbox with readiness, ambiguity, and stuck-state visibility.
-- **BATCH-02**: System reports throughput metrics and failure buckets to support `10-20` sites/day operations.
-- **BATCH-03**: Queue and release workflow are ready for later server-backed orchestration without replacing the internal assembler.
+- **BATCH-04**: System can distribute intake and repair work across multiple providers/accounts without changing publisher correctness rules.
+- **BATCH-05**: Runtime orchestration supports worker-pool style execution and provider routing for `10-20` sites/day throughput.
 
-### Enhanced Quality
+### Advanced Quality and Variability
 
-- **QUAL-01**: Release flow enforces Lighthouse thresholds for preview/exported output.
-- **QUAL-02**: Asset pipeline can generate responsive variants and smarter hero/LCP strategies when needed.
+- **QUAL-03**: Release flow enforces Lighthouse thresholds for preview/exported output.
+- **QUAL-04**: Asset pipeline can generate richer responsive media strategies and stronger anti-fingerprint variation policies.
 
 ## Out of Scope
 
@@ -85,56 +53,32 @@
 | Freeform agent-generated final HTML structure | Conflicts with deterministic contracts and makes validation fragile |
 | Agent-authored `head`/SEO/runtime logic | High-risk duplication of app-owned behavior |
 | Immediate migration to Astro/Eleventy/external builder | Adds unnecessary system churn before current runtime is fully hardened |
-| Multi-operator backend orchestration in the first stable milestone | Single-operator production line must be proven first |
+| Full multi-provider throughput work in this milestone | Intake correctness and rules alignment are higher leverage right now |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | Phase 1 | Complete |
-| PLAT-02 | Phase 1 | Complete |
-| INTK-01 | Phase 2 | Complete |
-| INTK-02 | Phase 2 | Complete |
-| INTK-03 | Phase 2 | Complete |
-| INTK-04 | Phase 2 | Complete |
-| CONT-01 | Phase 1 | Complete |
-| CONT-02 | Phase 1 | Complete |
-| CONT-03 | Phase 1 | Complete |
-| CONT-04 | Phase 1 | Complete |
-| CONT-05 | Phase 1 | Complete |
-| META-01 | Phase 1 | Complete |
-| META-02 | Phase 1 | Complete |
-| META-03 | Phase 3 | Complete |
-| BUILD-01 | Phase 3 | Complete |
-| BUILD-02 | Phase 3 | Complete |
-| BUILD-03 | Phase 3 | Complete |
-| BUILD-04 | Phase 4 | Complete |
-| OPER-01 | Phase 2 | Complete |
-| OPER-02 | Phase 2 | Complete |
-| OPER-03 | Phase 2 | Complete |
-| OPER-04 | Phase 4 | Complete |
-| AGNT-01 | Phase 5 | Complete |
-| AGNT-02 | Phase 5 | Complete |
-| AGNT-03 | Phase 5 | Complete |
-| AGNT-04 | Phase 5 | Complete |
-| VAL-01 | Phase 4 | Complete |
-| VAL-02 | Phase 4 | Complete |
-| VAL-03 | Phase 4 | Complete |
-| VAL-04 | Phase 4 | Complete |
-| PUB-01 | Phase 4 | Complete |
-| PUB-02 | Phase 4 | Complete |
-| PUB-03 | Phase 4 | Complete |
-| BATCH-01 | Phase 6 | Complete |
-| BATCH-02 | Phase 6 | Complete |
-| BATCH-03 | Phase 6 | Complete |
-| QUAL-01 | Phase 6 | Complete |
-| QUAL-02 | Phase 6 | Complete |
+| INTK-05 | Phase 7 | Complete |
+| INTK-06 | Phase 7 | Complete |
+| INTK-07 | Phase 7 | Complete |
+| CONT-06 | Phase 8 | Pending |
+| CONT-07 | Phase 8 | Pending |
+| CONT-08 | Phase 8 | Pending |
+| STAT-01 | Phase 9 | Pending |
+| STAT-02 | Phase 9 | Pending |
+| STAT-03 | Phase 9 | Pending |
+| OPER-05 | Phase 10 | Pending |
+| OPER-06 | Phase 10 | Pending |
+| OPER-07 | Phase 10 | Pending |
+| VAL-05 | Phase 10 | Pending |
+| VAL-06 | Phase 10 | Pending |
 
 **Coverage:**
-- v1 requirements: 31 total
-- Mapped to phases: 31
+- v1 requirements: 14 total
+- Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after Phase 1 completion*
+*Requirements defined: 2026-03-31*
+*Last updated: 2026-03-31 after phase 07 verification*
