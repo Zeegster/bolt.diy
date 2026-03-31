@@ -194,9 +194,9 @@ export function PublisherIntakeWorkspace({
   }, [selectedPage]);
 
   return (
-    <div className="absolute inset-0 overflow-auto bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
-      <div className="p-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+    <div className="absolute inset-0 overflow-hidden bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
+      <div className="flex h-full flex-col gap-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-300">
               {workflow.label}
@@ -238,7 +238,7 @@ export function PublisherIntakeWorkspace({
           </div>
         </div>
 
-        <div className="mb-4 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+        <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             {[
               ['intake', 'Intake review'],
@@ -268,8 +268,8 @@ export function PublisherIntakeWorkspace({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_420px]">
-          <div className="space-y-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_420px]">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -413,7 +413,7 @@ export function PublisherIntakeWorkspace({
             />
           </div>
 
-          <div className="flex min-h-0 flex-col gap-4">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
             {selectedPage && selectedDraft ? (
               <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -634,15 +634,17 @@ export function PublisherIntakeWorkspace({
             ) : null}
           </div>
 
-          <IntakeSourcePane
-            title="Source pane"
-            sourcePath={selectedDraft?.sourcePath}
-            sourceKind={selectedDraft?.sourceKind}
-            sourceLabel={selectedDraft?.sourceLabel ?? selectedDraft?.name}
-            rawContent={selectedSourceContent}
-            sourceReferences={sourceReferences}
-            notes={selectedDraft?.warnings}
-          />
+          <div className="min-h-0 overflow-y-auto pr-1">
+            <IntakeSourcePane
+              title="Source pane"
+              sourcePath={selectedDraft?.sourcePath}
+              sourceKind={selectedDraft?.sourceKind}
+              sourceLabel={selectedDraft?.sourceLabel ?? selectedDraft?.name}
+              rawContent={selectedSourceContent}
+              sourceReferences={sourceReferences}
+              notes={selectedDraft?.warnings}
+            />
+          </div>
         </div>
       </div>
     </div>

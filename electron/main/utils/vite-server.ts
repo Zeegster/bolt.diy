@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import path from 'node:path';
 import type { ViteDevServer } from 'vite';
 
 let viteServer: ViteDevServer | undefined;
@@ -10,6 +11,8 @@ export async function initViteServer() {
     viteServer = await vite.createServer({
       root: '.',
       envDir: process.cwd(), // load .env files from the root directory.
+      configFile: path.resolve(process.cwd(), 'vite-electron.config.ts'),
+      cacheDir: path.resolve(process.cwd(), 'node_modules/.vite-electron'),
     });
   }
 }

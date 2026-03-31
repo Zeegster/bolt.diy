@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AssetRef, PublisherMarkdownSource, PublisherSiteSettings } from '~/types/publisher';
 import { IntakeAssetField } from './IntakeAssetField';
+import { TagInput } from '~/components/ui/TagInput';
 
 interface AssetDraftState {
   current?: AssetRef;
@@ -28,11 +29,10 @@ interface PublisherSiteSettingsEditorProps {
   onSubmit: (payload: PublisherSiteSettingsSubmitPayload) => Promise<void> | void;
 }
 
-function normalizeLanguageEntries(defaultLanguage: string, multilingual: boolean, languagesInput: string) {
-  const parsed = languagesInput
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
+const LANGUAGE_OPTIONS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'tr', 'ru', 'uk', 'ar', 'zh', 'ja', 'ko'];
+
+function normalizeLanguageEntries(defaultLanguage: string, multilingual: boolean, languagesInput: string[]) {
+  const parsed = languagesInput.map((entry) => entry.trim().toLowerCase()).filter(Boolean);
   const next = new Set(parsed);
   const normalizedDefault = defaultLanguage.trim().toLowerCase();
 
@@ -58,7 +58,7 @@ export function PublisherSiteSettingsEditor({
   const [defaultLanguage, setDefaultLanguage] = useState(initialSettings?.defaultLanguage ?? 'en');
   const [multilingual, setMultilingual] = useState(initialSettings?.multilingual ?? false);
   const [languagesInput, setLanguagesInput] = useState(
-    (initialSettings?.languages ?? [initialSettings?.defaultLanguage ?? 'en']).join(', '),
+    initialSettings?.languages ?? [initialSettings?.defaultLanguage ?? 'en'],
   );
   const [favicon, setFavicon] = useState<AssetDraftState>({ current: initialSettings?.favicon });
   const [metaImage, setMetaImage] = useState<AssetDraftState>({ current: initialSettings?.metaImage });
@@ -71,7 +71,7 @@ export function PublisherSiteSettingsEditor({
     setDomain(initialSettings?.domain ?? '');
     setDefaultLanguage(initialSettings?.defaultLanguage ?? 'en');
     setMultilingual(initialSettings?.multilingual ?? false);
-    setLanguagesInput((initialSettings?.languages ?? [initialSettings?.defaultLanguage ?? 'en']).join(', '));
+    setLanguagesInput(initialSettings?.languages ?? [initialSettings?.defaultLanguage ?? 'en']);
     setFavicon({ current: initialSettings?.favicon });
     setMetaImage({ current: initialSettings?.metaImage });
     setLogo({ current: initialSettings?.logo });
@@ -168,33 +168,33 @@ export function PublisherSiteSettingsEditor({
           />
         </label>
 
-        <label className="flex flex-col gap-2 text-sm">
-          <span className="text-bolt-elements-textPrimary">Default language</span>
-          <input
-            value={defaultLanguage}
-            onChange={(event) => setDefaultLanguage(event.target.value)}
-            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="en"
-          />
-        </label>
+        <TagInput
+          label="Default language"
+          mode="single"
+          options={LANGUAGE_OPTIONS}
+          value={defaultLanguage}
+          onChange={(next) => setDefaultLanguage(typeof next === 'string' ? next : next[0] || 'en')}
+          placeholder="Search language code"
+        />
 
         <label className="flex items-center gap-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-sm">
           <input type="checkbox" checked={multilingual} onChange={(event) => setMultilingual(event.target.checked)} />
           <span>Enable multilingual mode</span>
         </label>
 
-        <label className="flex flex-col gap-2 text-sm xl:col-span-2">
-          <span className="text-bolt-elements-textPrimary">Languages list</span>
-          <input
+        <div className="xl:col-span-2">
+          <TagInput
+            label="Languages list"
+            mode="multiple"
+            options={LANGUAGE_OPTIONS}
             value={languagesInput}
-            onChange={(event) => setLanguagesInput(event.target.value)}
-            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="en, de"
+            onChange={(next) => setLanguagesInput(Array.isArray(next) ? next : next ? [next] : [])}
+            placeholder="Search or type language code"
           />
-          <span className="text-xs text-bolt-elements-textSecondary">
-            Comma-separated language codes. Default language is always included.
+          <span className="mt-1 block text-xs text-bolt-elements-textSecondary">
+            Default language is always included.
           </span>
-        </label>
+        </div>
 
         <IntakeAssetField
           label="Favicon"

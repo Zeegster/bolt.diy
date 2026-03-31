@@ -110,6 +110,29 @@ export function PublisherIntakeReviewWorkspace({
     [selectedBrokenPageIds, session],
   );
   const brokenPages = session.pages.filter(isBrokenMetadataPage);
+  const invalidMetadataChecks = useMemo(() => {
+    return brokenPages.map((page) => {
+      const messages: string[] = [];
+
+      if (!page.title.trim()) {
+        messages.push('No title could be extracted from the document.');
+      }
+
+      if (!page.description?.trim()) {
+        messages.push('No description could be extracted from the document.');
+      }
+
+      if (!page.h1?.trim()) {
+        messages.push('No H1 could be extracted from the document.');
+      }
+
+      return {
+        id: page.id,
+        pageName: page.name,
+        messages,
+      };
+    });
+  }, [brokenPages]);
   const selectedPageChecks = selectedPage ? session.checks.filter((check) => check.pageId === selectedPage.id) : [];
   const selectedSourcePath = selectedPage?.storedSourcePath ?? selectedPage?.sourcePath;
   const sourceDoc: EditorDocument | undefined = rawSource
@@ -162,7 +185,7 @@ export function PublisherIntakeReviewWorkspace({
 
   if (pendingDisambiguation) {
     return (
-      <div className="absolute inset-0 overflow-auto bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
+      <div className="absolute inset-0 overflow-hidden bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
         <div className="mx-auto mt-10 max-w-3xl rounded-xl border border-red-500/20 bg-red-500/5 p-6">
           <h3 className="text-base font-semibold">Resolve intake disambiguation</h3>
           <p className="mt-2 text-sm text-bolt-elements-textSecondary">
@@ -232,9 +255,9 @@ export function PublisherIntakeReviewWorkspace({
   }
 
   return (
-    <div className="absolute inset-0 overflow-auto bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
-      <div className="p-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+    <div className="absolute inset-0 overflow-hidden bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
+      <div className="flex h-full flex-col gap-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-300">
               Intake review
@@ -261,7 +284,7 @@ export function PublisherIntakeReviewWorkspace({
           </button>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <button
             type="button"
             disabled={unresolvedItemIds.length === 0}
@@ -298,7 +321,7 @@ export function PublisherIntakeReviewWorkspace({
           </button>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="text-sm font-medium text-bolt-elements-textPrimary">Metadata recovery batch</div>
             <div className="mt-1 text-xs text-bolt-elements-textSecondary">
@@ -327,8 +350,8 @@ export function PublisherIntakeReviewWorkspace({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
-          <div className="space-y-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
               <h3 className="text-sm font-semibold">Project intake</h3>
               <p className="mt-1 text-xs text-bolt-elements-textSecondary">
@@ -478,6 +501,31 @@ export function PublisherIntakeReviewWorkspace({
             </div>
 
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+              <h4 className="text-sm font-semibold">Невалидные проверки</h4>
+              <div className="mt-3 space-y-2">
+                {invalidMetadataChecks.length > 0 ? (
+                  invalidMetadataChecks.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                    >
+                      <div className="mb-1 font-medium text-amber-100">{entry.pageName}</div>
+                      <div className="space-y-1">
+                        {entry.messages.map((message) => (
+                          <div key={message}>{message}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+                    No metadata recovery is needed right now.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
               <h4 className="text-sm font-semibold">Broken pages</h4>
               <div className="mt-3 space-y-2">
                 {brokenPages.length > 0 ? (
@@ -499,8 +547,8 @@ export function PublisherIntakeReviewWorkspace({
                     </label>
                   ))
                 ) : (
-                  <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-300">
-                    No metadata recovery is needed right now.
+                  <div className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-xs text-bolt-elements-textSecondary">
+                    No broken pages.
                   </div>
                 )}
               </div>
@@ -553,7 +601,7 @@ export function PublisherIntakeReviewWorkspace({
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
             {selectedPage && selectedDraft ? (
               <IntakePageEditor
                 draft={selectedDraft}
@@ -591,7 +639,7 @@ export function PublisherIntakeReviewWorkspace({
             </div>
           </div>
 
-          <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+          <div className="min-h-0 overflow-y-auto rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
             <h3 className="text-sm font-semibold">Source preview</h3>
             <div className="mt-1 text-xs text-bolt-elements-textSecondary">
               {selectedPage?.sourcePath ?? 'No source selected'}

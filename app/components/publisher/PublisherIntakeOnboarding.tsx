@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { PublisherSiteSettings } from '~/types/publisher';
 import { IntakeAssetField } from './IntakeAssetField';
+import { TagInput } from '~/components/ui/TagInput';
 
 interface AssetDraftState {
   currentLabel?: string;
@@ -24,12 +25,11 @@ interface PublisherIntakeOnboardingProps {
   onSubmit: (payload: PublisherIntakeOnboardingSubmitPayload) => Promise<void> | void;
 }
 
-function normalizeLanguageEntries(defaultLanguage: string, multilingual: boolean, languagesInput: string) {
+const LANGUAGE_OPTIONS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'tr', 'ru', 'uk', 'ar', 'zh', 'ja', 'ko'];
+
+function normalizeLanguageEntries(defaultLanguage: string, multilingual: boolean, languagesInput: string[]) {
   const normalizedDefault = defaultLanguage.trim().toLowerCase();
-  const entries = languagesInput
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
+  const entries = languagesInput.map((entry) => entry.trim().toLowerCase()).filter(Boolean);
   const set = new Set(entries);
 
   if (normalizedDefault) {
@@ -56,7 +56,7 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
   const [domain, setDomain] = useState('');
   const [defaultLanguage, setDefaultLanguage] = useState('en');
   const [multilingual, setMultilingual] = useState(false);
-  const [languagesInput, setLanguagesInput] = useState('en');
+  const [languagesInput, setLanguagesInput] = useState<string[]>(['en']);
   const [importKind, setImportKind] = useState<'document' | 'html'>('document');
   const [sourceFiles, setSourceFiles] = useState<File[]>([]);
   const [favicon, setFavicon] = useState<AssetDraftState>({});
@@ -150,33 +150,33 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
           />
         </label>
 
-        <label className="flex flex-col gap-2 text-sm">
-          <span className="text-bolt-elements-textPrimary">Default language</span>
-          <input
-            value={defaultLanguage}
-            onChange={(event) => setDefaultLanguage(event.target.value)}
-            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="en"
-          />
-        </label>
+        <TagInput
+          label="Default language"
+          mode="single"
+          options={LANGUAGE_OPTIONS}
+          value={defaultLanguage}
+          onChange={(next) => setDefaultLanguage(typeof next === 'string' ? next : next[0] || 'en')}
+          placeholder="Search language code"
+        />
 
         <label className="flex items-center gap-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-sm">
           <input type="checkbox" checked={multilingual} onChange={(event) => setMultilingual(event.target.checked)} />
           <span>Enable multilingual mode</span>
         </label>
 
-        <label className="flex flex-col gap-2 text-sm xl:col-span-2">
-          <span className="text-bolt-elements-textPrimary">Languages list</span>
-          <input
+        <div className="xl:col-span-2">
+          <TagInput
+            label="Languages list"
+            mode="multiple"
+            options={LANGUAGE_OPTIONS}
             value={languagesInput}
-            onChange={(event) => setLanguagesInput(event.target.value)}
-            className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="en, fr"
+            onChange={(next) => setLanguagesInput(Array.isArray(next) ? next : next ? [next] : [])}
+            placeholder="Search or type language code"
           />
-          <span className="text-xs text-bolt-elements-textSecondary">
-            Comma-separated language codes. Default language is always included.
+          <span className="mt-1 block text-xs text-bolt-elements-textSecondary">
+            Default language is always included.
           </span>
-        </label>
+        </div>
 
         <div className="xl:col-span-2 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
           <div className="text-sm font-medium text-bolt-elements-textPrimary">Import path</div>

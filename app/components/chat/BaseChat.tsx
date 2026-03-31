@@ -793,6 +793,27 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </p>
               </div>
             )}
+            {!chatStarted ? (
+              <div className="mt-4 mb-2 flex justify-center px-4">
+                <div className="inline-flex items-center gap-1 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1">
+                  {(['default', 'publisher'] as WorkspaceMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => onWorkspaceModeChange?.(mode)}
+                      className={classNames(
+                        'rounded-full px-3 py-1.5 text-sm transition-colors',
+                        workspaceMode === mode
+                          ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
+                          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                      )}
+                    >
+                      {mode === 'default' ? 'Default Bolt' : 'Publisher'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <StickToBottom
               className={classNames('pt-6 px-2 sm:px-6 relative', {
                 'h-full flex flex-col modern-scrollbar': chatStarted || publisherWorkspaceReady,
@@ -1163,38 +1184,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             <div className="flex flex-col justify-center">
               {!chatStarted && (
                 <div className="flex flex-col gap-4 max-w-chat mx-auto w-full px-4">
-                  <div className="flex justify-center">
-                    <div className="inline-flex items-center gap-1 rounded-full border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1">
-                      {(['default', 'publisher'] as WorkspaceMode[]).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => onWorkspaceModeChange?.(mode)}
-                          className={classNames(
-                            'rounded-full px-3 py-1.5 text-sm transition-colors',
-                            workspaceMode === mode
-                              ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
-                              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
-                          )}
-                        >
-                          {mode === 'default' ? 'Default Bolt' : 'Publisher'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {workspaceMode === 'default' ? (
                     <div className="flex justify-center gap-2">
                       {ImportButtons(importChat)}
                       <GitCloneButton importChat={importChat} />
                     </div>
-                  ) : null}
-
-                  {workspaceMode === 'publisher' && !publisherWorkspaceReady ? (
-                    <PublisherIntakeOnboarding
-                      busy={publisherOnboardingBusy}
-                      onSubmit={(payload) => onPublisherOnboardingSubmit?.(payload)}
-                    />
                   ) : null}
                 </div>
               )}
@@ -1218,6 +1212,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 ) : null}
               </div>
             </div>
+            {!chatStarted && workspaceMode === 'publisher' && !publisherWorkspaceReady ? (
+              <div className="mx-auto mt-4 mb-6 w-full max-w-[1280px] px-4 lg:px-8">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+                  <div />
+                  <PublisherIntakeOnboarding
+                    busy={publisherOnboardingBusy}
+                    onSubmit={(payload) => onPublisherOnboardingSubmit?.(payload)}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
           <ClientOnly>
             {() => (
