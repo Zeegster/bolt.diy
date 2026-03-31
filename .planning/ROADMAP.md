@@ -9,7 +9,7 @@ Milestone `v1.1` focuses on the gap between the current publisher foundation and
 - [x] **Phase 7: Complete Manual Intake Flow** - Turn the existing intake pieces into one operator-complete flow with explicit blockers, fixes, and completion semantics.
 - [x] **Phase 8: Enforce Content and Heading Integrity** - Remove remaining template/pipeline behaviors that inject meaning or headings outside the source-of-truth document contract.
 - [x] **Phase 9: Align Static-Site Project Contract** - Make generated artifacts and project structure match the shared fast-sites rules for links, metadata consistency, tables/media, and static deploy shape.
-- [ ] **Phase 10: Rules Diagnostics and End-to-End Validation** - Add operator-facing diagnostics and release checks that prove the full manual intake flow under the new rules.
+- [x] **Phase 10: Rules Diagnostics and End-to-End Validation** - Add operator-facing diagnostics and release checks that prove the full manual intake flow under the new rules.
 
 ## Phase Details
 
@@ -69,10 +69,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 10-01: Add fast-sites diagnostics taxonomy and source/template/runtime attribution in the operator UI.
-- [ ] 10-02: Connect constrained repair actions to the new diagnostics without widening agent scope.
-- [ ] 10-03: Expand release gates for fast-sites invariants and rule-specific blockers.
-- [ ] 10-04: Land end-to-end fixture coverage for the complete manual intake flow.
+- [x] 10-01-PLAN.md — Add fast-sites diagnostics taxonomy and source/template/runtime attribution in operator review surfaces.
+- [x] 10-02-PLAN.md — Connect constrained repair actions to diagnostics without widening agent scope.
+- [x] 10-03-PLAN.md — Expand release gates for fast-sites invariants with actionable rule diagnostics.
+- [x] 10-04-PLAN.md — Land end-to-end canonical/broken fixture coverage for complete manual intake flow.
 
 ## Progress
 
@@ -84,4 +84,4 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 7. Complete Manual Intake Flow | 3/3 | Complete | 2026-03-31 |
 | 8. Enforce Content and Heading Integrity | 3/3 | Complete | 2026-03-31 |
 | 9. Align Static-Site Project Contract | 3/3 | Complete | 2026-03-31 |
-| 10. Rules Diagnostics and End-to-End Validation | 0/4 | Not started | — |
+| 10. Rules Diagnostics and End-to-End Validation | 4/4 | Complete   | 2026-03-31 |

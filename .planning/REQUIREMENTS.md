@@ -25,14 +25,14 @@
 
 ### Operator Review and Repair
 
-- [ ] **OPER-05**: Operator UI exposes purpose-built diagnostics for fast-sites rule violations, including heading drift, content injection, linking misuse, and unsupported source structure.
-- [ ] **OPER-06**: Operator can resolve document/template/rules mismatches through constrained review actions instead of ad hoc freeform generation.
-- [ ] **OPER-07**: Review surfaces make it obvious which issue came from source input, which came from template choice, and which came from generation/runtime layers.
+- [x] **OPER-05**: Operator UI exposes purpose-built diagnostics for fast-sites rule violations, including heading drift, content injection, linking misuse, and unsupported source structure.
+- [x] **OPER-06**: Operator can resolve document/template/rules mismatches through constrained review actions instead of ad hoc freeform generation.
+- [x] **OPER-07**: Review surfaces make it obvious which issue came from source input, which came from template choice, and which came from generation/runtime layers.
 
 ### Validation and Readiness
 
-- [ ] **VAL-05**: Release readiness checks fail when generated output violates fast-sites content, heading, link-zone, or static-bundle invariants.
-- [ ] **VAL-06**: The project includes at least one representative end-to-end fixture proving a full manual intake flow under the new rules.
+- [x] **VAL-05**: Release readiness checks fail when generated output violates fast-sites content, heading, link-zone, or static-bundle invariants.
+- [x] **VAL-06**: The project includes at least one representative end-to-end fixture proving a full manual intake flow under the new rules.
 
 ## v2 Requirements
 
@@ -68,11 +68,11 @@
 | STAT-01 | Phase 9 | Complete |
 | STAT-02 | Phase 9 | Complete |
 | STAT-03 | Phase 9 | Complete |
-| OPER-05 | Phase 10 | Pending |
-| OPER-06 | Phase 10 | Pending |
-| OPER-07 | Phase 10 | Pending |
-| VAL-05 | Phase 10 | Pending |
-| VAL-06 | Phase 10 | Pending |
+| OPER-05 | Phase 10 | Complete |
+| OPER-06 | Phase 10 | Complete |
+| OPER-07 | Phase 10 | Complete |
+| VAL-05 | Phase 10 | Complete |
+| VAL-06 | Phase 10 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after phase 09 verification*
+*Last updated: 2026-03-31 after phase 10 verification*
