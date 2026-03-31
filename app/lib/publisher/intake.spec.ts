@@ -1083,6 +1083,64 @@ Alpha`,
     expect(loadedFromStorage?.scriptRuns).toEqual(result.session.scriptRuns);
   });
 
+  it('intake session persistence round-trip keeps unresolved choices, selected fixes, and completion markers', () => {
+    const result = buildImportedBundleAdapter({
+      sessionId: 'intake-persistence-roundtrip',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+      now: '2026-03-31T12:00:00.000Z',
+    });
+    const firstPage = result.session.pages[0];
+
+    result.session.reviewState = {
+      unresolvedSourceChoices: {
+        'home-candidate': 'pages/index.html',
+      },
+      selectedFixes: firstPage
+        ? {
+            [firstPage.id]: {
+              title: 'Resolved Home Title',
+              h1: 'Resolved Home Heading',
+              updatedAt: '2026-03-31T12:05:00.000Z',
+            },
+          }
+        : {},
+      completionMarkers: {
+        reviewReady: false,
+        intakeApplied: false,
+        updatedAt: '2026-03-31T12:06:00.000Z',
+      },
+      selectedBrokenPageIds: firstPage ? [firstPage.id] : [],
+    };
+
+    const files = Object.fromEntries(
+      Object.entries(serializeIntakeSessionFiles(result.session)).map(([path, content]) => [
+        path,
+        { type: 'file', content },
+      ]),
+    ) as any;
+    const globalWithWindow = globalThis as any;
+    globalWithWindow.window = { localStorage: createMemoryStorage() };
+
+    saveIntakeSession(result.session);
+
+    const loadedFromFiles = loadIntakeSessionFromFiles(files);
+    const loadedFromStorage = loadStoredIntakeSession(result.session.id);
+
+    expect(loadedFromFiles?.reviewState?.unresolvedSourceChoices['home-candidate']).toBe('pages/index.html');
+    expect(loadedFromFiles?.reviewState?.selectedFixes[firstPage?.id ?? '']?.title).toBe('Resolved Home Title');
+    expect(loadedFromFiles?.reviewState?.completionMarkers.updatedAt).toBe('2026-03-31T12:06:00.000Z');
+    expect(loadedFromStorage?.reviewState?.selectedBrokenPageIds).toEqual(firstPage ? [firstPage.id] : []);
+  });
+
   it('batch normalize only targets missing metadata pages', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'imported-batch-review',
