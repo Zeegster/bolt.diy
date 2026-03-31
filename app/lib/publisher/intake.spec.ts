@@ -32,6 +32,8 @@ import {
   categorizeIntakeCheck,
   createIntakePageDraft,
   deriveBatchNormalizeReviewState,
+  deriveIntakeDiagnosticOrigin,
+  getDiagnosticOriginLabel,
   getIntakeDiagnosticRemediation,
 } from './intake-ui';
 import { deriveCanonicalIntakeLifecycleState } from './status';
@@ -1159,6 +1161,19 @@ Paragraph only.`,
     expect(getIntakeDiagnosticRemediation({ id: 'decorative-zone-primary-content' })).toContain(
       'Reassign primary narrative copy to content zone slots',
     );
+  });
+
+  it('maps intake diagnostics to deterministic origin layers', () => {
+    expect(deriveIntakeDiagnosticOrigin({ id: 'template-heading-injection' })).toBe('template');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'decorative-zone-content-injection' })).toBe('template');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'decorative-zone-primary-content' })).toBe('template');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'missing-page-title' })).toBe('source');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'missing-page-description' })).toBe('source');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'missing-page-h1' })).toBe('source');
+    expect(deriveIntakeDiagnosticOrigin({ id: 'missing-page-sections' })).toBe('source');
+    expect(getDiagnosticOriginLabel('source')).toBe('Source input');
+    expect(getDiagnosticOriginLabel('template')).toBe('Template composition');
+    expect(getDiagnosticOriginLabel('runtime')).toBe('Runtime generation');
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {

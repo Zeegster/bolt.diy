@@ -10,7 +10,12 @@ import { buildIntakePageChecks } from './intake';
 import { buildPublisherContractsFromIntakeSession } from './intake-pipeline';
 import { buildImportedBundleAdapter } from './intake-adapter';
 import { buildPromptForRepairIntent, deriveRepairIntentFromCheck } from './agent-model';
-import { categorizePublisherDiagnostic, createIntakeReviewDraft } from './intake-ui';
+import {
+  categorizePublisherDiagnostic,
+  createIntakeReviewDraft,
+  derivePublisherDiagnosticOrigin,
+  getDiagnosticOriginLabel,
+} from './intake-ui';
 import { createPublisherAssetRef } from './file-helpers';
 import { normalizePublisherBuildSummary } from './persistence';
 import { publisherTemplates } from './templates';
@@ -1697,6 +1702,22 @@ describe('publisher workflow', () => {
         message: 'Decorative zone owns primary narrative.',
       }),
     ).toBe('composition');
+  });
+
+  it('maps publisher diagnostics to deterministic origin layers', () => {
+    expect(derivePublisherDiagnosticOrigin({ name: 'template-heading-injection' })).toBe('template');
+    expect(derivePublisherDiagnosticOrigin({ name: 'decorative-zone-content-injection' })).toBe('template');
+    expect(derivePublisherDiagnosticOrigin({ name: 'decorative-zone-primary-content' })).toBe('template');
+    expect(derivePublisherDiagnosticOrigin({ name: 'missing-page-title' })).toBe('source');
+    expect(derivePublisherDiagnosticOrigin({ name: 'missing-page-description' })).toBe('source');
+    expect(derivePublisherDiagnosticOrigin({ name: 'missing-page-h1' })).toBe('source');
+    expect(derivePublisherDiagnosticOrigin({ name: 'missing-page-sections' })).toBe('source');
+    expect(derivePublisherDiagnosticOrigin({ name: 'zone-link-policy' })).toBe('runtime');
+    expect(derivePublisherDiagnosticOrigin({ name: 'technical-file-consistency' })).toBe('runtime');
+    expect(derivePublisherDiagnosticOrigin({ name: 'table-media-wrapper' })).toBe('runtime');
+    expect(getDiagnosticOriginLabel('source')).toBe('Source input');
+    expect(getDiagnosticOriginLabel('template')).toBe('Template composition');
+    expect(getDiagnosticOriginLabel('runtime')).toBe('Runtime generation');
   });
 
   it('describes constrained slot editing boundaries for reserved and invalid props', () => {
