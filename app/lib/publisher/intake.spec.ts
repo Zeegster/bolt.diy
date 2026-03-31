@@ -28,6 +28,7 @@ import {
 } from './intake-session';
 import { buildImportedBundleAdapter } from './intake-adapter';
 import { deriveBatchNormalizeReviewState } from './intake-ui';
+import { deriveCanonicalIntakeLifecycleState } from './status';
 
 function createHtmlDocument(html: string) {
   return new JSDOM(html).window.document;
@@ -249,6 +250,94 @@ afterEach(() => {
 });
 
 describe('intake pipeline', () => {
+  it('canonical intake lifecycle moves from scan to review to release-ready for supported packs', () => {
+    const adapted = buildImportedBundleAdapter({
+      sessionId: 'canonical-supported',
+      sourceLabel: '/imports/spinaura',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Spinaura Casino',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+
+    expect(deriveCanonicalIntakeLifecycleState({ intakeSession: adapted.session, checks: [] })).toBe('intake-review');
+
+    const appliedSession = {
+      ...adapted.session,
+      status: 'applied' as const,
+    };
+
+    expect(deriveCanonicalIntakeLifecycleState({ intakeSession: appliedSession, checks: [] })).toBe('contract-ready');
+    expect(
+      deriveCanonicalIntakeLifecycleState({
+        intakeSession: appliedSession,
+        checks: [],
+        lastBuild: {
+          id: 'build-1',
+          createdAt: '2026-03-31T10:00:00.000Z',
+          status: 'release-ready',
+          stage: 'check',
+          workingFailures: 0,
+          releaseFailures: 0,
+          warningCount: 0,
+          artifacts: [],
+          pipeline: {
+            schemaVersion: '1.0.0',
+            stageOrder: ['assemble', 'optimize', 'check', 'publish', 'export'],
+            deliveryStage: 'publish',
+            stages: [{ stage: 'check', status: 'completed', summary: 'ok', details: [] }],
+            jobs: [],
+            activeStage: 'check',
+            publishContract: {
+              schemaVersion: '1.0.0',
+              buildId: 'build-1',
+              generatedAt: '2026-03-31T10:00:00.000Z',
+              canPublish: true,
+              publishWarnings: [],
+              publishBlockers: [],
+              sourceFingerprint: 'src-hash',
+              artifactFingerprint: 'artifact-hash',
+              rollback: {
+                strategy: 'rebuild',
+                keepLastBuilds: 2,
+              },
+            },
+          },
+        },
+      }),
+    ).toBe('release-ready');
+  });
+
+  it('canonical intake lifecycle remains blocked when critical intake data is missing', () => {
+    const session = createIntakeSession({
+      id: 'canonical-blocked',
+      sourceRoot: '/fixtures',
+      importKind: 'document',
+      scenario: 'needsDisambiguation',
+      activeContentFamily: 'document',
+      projectName: 'Blocked Fixture',
+      sourceManifest: buildIntakeSourceManifest(contentSourceFixture, '/fixtures'),
+      pages: [],
+      warnings: [],
+    });
+
+    session.disambiguation = {
+      status: 'pending',
+      reason: 'Needs operator decision',
+      candidateImportKinds: ['document'],
+      templateCandidatePaths: [],
+      homeCandidatePaths: [],
+      selectedImportKind: 'document',
+    };
+
+    expect(deriveCanonicalIntakeLifecycleState({ intakeSession: session, checks: [] })).toBe('pending-disambiguation');
+  });
+
   it('classifies a hybrid site as template-plus-documents when html is forced', () => {
     const scan = scanIntakeSourceTree(hybridSources, {
       rootPath: '/work/pinegrow/spinaura-casino-fr.com',
