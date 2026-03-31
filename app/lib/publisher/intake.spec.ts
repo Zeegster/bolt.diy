@@ -7,6 +7,7 @@ import {
   buildIntakeSourceManifest,
   buildIntakePageChecks,
   createIntakeSession,
+  deriveIntakeWorkItems,
   detectIntakeScenario,
   extractDocumentPageDraft,
   extractHtmlPageDraftFromDocument,
@@ -334,6 +335,74 @@ describe('intake pipeline', () => {
       homeCandidatePaths: [],
       selectedImportKind: 'document',
     };
+
+    expect(deriveCanonicalIntakeLifecycleState({ intakeSession: session, checks: [] })).toBe('pending-disambiguation');
+  });
+
+  it('completion blockers vs review tasks separates ambiguous work from hard blockers', () => {
+    const session = createIntakeSession({
+      id: 'work-items-split',
+      sourceRoot: '/fixtures',
+      importKind: 'document',
+      scenario: 'mixed-source-conflict',
+      activeContentFamily: 'document',
+      projectName: 'Split Fixture',
+      sourceManifest: buildIntakeSourceManifest(contentSourceFixture, '/fixtures'),
+      pages: [],
+      warnings: [],
+    });
+
+    session.checks = [
+      {
+        id: 'mixed-source-conflict',
+        severity: 'warn',
+        message: 'Mixed pack requires review',
+      },
+      {
+        id: 'missing-home-page-source',
+        severity: 'fail',
+        message: 'Cannot continue without a home page source',
+      },
+    ];
+
+    const workItems = deriveIntakeWorkItems(session);
+    expect(workItems.reviewTasks.map((item) => item.id)).toContain('mixed-source-conflict');
+    expect(workItems.completionBlockers.map((item) => item.id)).toContain('missing-home-page-source');
+  });
+
+  it('completion blockers vs review tasks gates blocked state from blockers only', () => {
+    const session = createIntakeSession({
+      id: 'work-items-gating',
+      sourceRoot: '/fixtures',
+      importKind: 'document',
+      scenario: 'document-import',
+      activeContentFamily: 'document',
+      projectName: 'Gating Fixture',
+      sourceManifest: buildIntakeSourceManifest(contentSourceFixture, '/fixtures'),
+      pages: [],
+      warnings: [],
+    });
+
+    session.status = 'reviewing';
+    session.checks = [
+      {
+        id: 'mixed-source-conflict',
+        severity: 'warn',
+        message: 'Needs review only',
+      },
+    ];
+    session.completionBlockers = [];
+    session.reviewTasks = session.checks;
+
+    expect(deriveCanonicalIntakeLifecycleState({ intakeSession: session, checks: [] })).toBe('intake-review');
+
+    session.completionBlockers = [
+      {
+        id: 'missing-home-page-source',
+        severity: 'fail',
+        message: 'Cannot continue',
+      },
+    ];
 
     expect(deriveCanonicalIntakeLifecycleState({ intakeSession: session, checks: [] })).toBe('pending-disambiguation');
   });
