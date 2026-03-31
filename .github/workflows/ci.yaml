@@ -10,11 +10,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup and Build
         uses: ./.github/actions/setup-and-build
