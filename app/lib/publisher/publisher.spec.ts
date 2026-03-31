@@ -1450,7 +1450,22 @@ describe('publisher workflow', () => {
     });
     expect(prompt).toContain('intent: repair');
     expect(prompt).toContain('repairOrigin: runtime');
+    expect(prompt).toContain('repairStrategy: runtime-contract-fix');
     expect(prompt).toContain('Repair only the failing publisher contract fields needed to resolve the named check.');
+  });
+
+  it('encodes family-specific repair strategies in constrained prompts', () => {
+    const sourcePrompt = buildRepairRegeneratePrompt('missing-page-title', 'home');
+    const templatePrompt = buildRepairRegeneratePrompt('template-heading-injection', 'home', 'beforeContent');
+    const runtimePrompt = buildRepairRegeneratePrompt('zone-link-policy', 'home', 'content');
+
+    expect(sourcePrompt).toContain('repairOrigin: source');
+    expect(sourcePrompt).toContain('repairStrategy: source-reextract');
+    expect(templatePrompt).toContain('repairOrigin: template');
+    expect(templatePrompt).toContain('repairStrategy: template-adjust');
+    expect(runtimePrompt).toContain('repairOrigin: runtime');
+    expect(runtimePrompt).toContain('repairStrategy: runtime-contract-fix');
+    expect(runtimePrompt).toContain('targetFileScope: contracts-plus-checks');
   });
 
   it('repair intent maps known diagnostics to constrained repair action', () => {

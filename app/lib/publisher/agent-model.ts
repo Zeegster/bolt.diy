@@ -49,21 +49,26 @@ function getCheckZone(check: CheckReport): ZoneType | undefined {
   return check.zone;
 }
 
-const SUPPORTED_REPAIR_CHECKS = new Set([
-  'missing-page-title',
-  'missing-page-description',
-  'missing-page-h1',
-  'missing-page-sections',
-  'template-heading-injection',
-  'decorative-zone-content-injection',
-  'decorative-zone-primary-content',
-  'zone-link-policy',
-  'technical-file-consistency',
-  'table-media-wrapper',
-]);
+function isSupportedRepairCheckName(name: string) {
+  switch (name) {
+    case 'missing-page-title':
+    case 'missing-page-description':
+    case 'missing-page-h1':
+    case 'missing-page-sections':
+    case 'template-heading-injection':
+    case 'decorative-zone-content-injection':
+    case 'decorative-zone-primary-content':
+    case 'zone-link-policy':
+    case 'technical-file-consistency':
+    case 'table-media-wrapper':
+      return true;
+    default:
+      return false;
+  }
+}
 
 export function deriveRepairIntentFromCheck(check: CheckReport): PublisherAgentActionContract | null {
-  if (!SUPPORTED_REPAIR_CHECKS.has(check.name)) {
+  if (!isSupportedRepairCheckName(check.name)) {
     return null;
   }
 

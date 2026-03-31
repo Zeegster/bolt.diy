@@ -59,15 +59,18 @@ describe('publisher orchestration', () => {
     ]);
   });
 
-  it('repair intent prompt encodes constrained scope and origin marker', () => {
+  it('repair intent prompt encodes constrained scope, origin marker, and strategy marker', () => {
     const sourcePrompt = buildRepairRegeneratePrompt('missing-page-h1', 'home');
     const templatePrompt = buildRepairRegeneratePrompt('decorative-zone-primary-content', 'home', 'beforeContent');
     const runtimePrompt = buildRepairRegeneratePrompt('table-media-wrapper', 'home', 'content');
 
     expect(sourcePrompt).toContain('targetFileScope: contracts-plus-checks');
     expect(sourcePrompt).toContain('repairOrigin: source');
+    expect(sourcePrompt).toContain('repairStrategy: source-reextract');
     expect(templatePrompt).toContain('repairOrigin: template');
+    expect(templatePrompt).toContain('repairStrategy: template-adjust');
     expect(runtimePrompt).toContain('repairOrigin: runtime');
+    expect(runtimePrompt).toContain('repairStrategy: runtime-contract-fix');
     expect(runtimePrompt).toContain(
       'Repair only the failing publisher contract fields needed to resolve the named check.',
     );

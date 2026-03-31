@@ -21,6 +21,29 @@ function deriveRepairOriginFromCheckName(checkName: string): 'source' | 'templat
   return 'runtime';
 }
 
+function deriveRepairStrategyFromCheckName(
+  checkName: string,
+): 'source-reextract' | 'template-adjust' | 'runtime-contract-fix' {
+  if (
+    checkName === 'missing-page-title' ||
+    checkName === 'missing-page-description' ||
+    checkName === 'missing-page-h1' ||
+    checkName === 'missing-page-sections'
+  ) {
+    return 'source-reextract';
+  }
+
+  if (
+    checkName === 'template-heading-injection' ||
+    checkName === 'decorative-zone-content-injection' ||
+    checkName === 'decorative-zone-primary-content'
+  ) {
+    return 'template-adjust';
+  }
+
+  return 'runtime-contract-fix';
+}
+
 export function buildPublisherRegeneratePrompt(context: PublisherAgentContext, instructions: string[]) {
   const lines = [
     'Work in Publisher Mode only.',
@@ -79,6 +102,7 @@ export function buildPageRegeneratePrompt(pageId: string) {
 
 export function buildRepairRegeneratePrompt(checkName: string, pageId?: string, zone?: ZoneType) {
   const repairOrigin = deriveRepairOriginFromCheckName(checkName);
+  const repairStrategy = deriveRepairStrategyFromCheckName(checkName);
 
   return buildPublisherRegeneratePrompt(
     {
@@ -91,6 +115,7 @@ export function buildRepairRegeneratePrompt(checkName: string, pageId?: string, 
       'targetFileScope: contracts-plus-checks',
       `repairCheck: ${checkName}`,
       `repairOrigin: ${repairOrigin}`,
+      `repairStrategy: ${repairStrategy}`,
       pageId ? `repairPage: ${pageId}` : undefined,
       zone ? `repairZone: ${zone}` : undefined,
       'Repair only the failing publisher contract fields needed to resolve the named check.',
