@@ -1,8 +1,8 @@
 import {
   optionalPublisherZones,
+  publisherZoneTypes,
   type CheckReport,
   type LoadedPublisherState,
-  type PageContract,
   type SlotContract,
 } from '~/types/publisher';
 import type { PublisherBlockRegistry } from './block-registry';
@@ -19,6 +19,7 @@ import {
 } from './metadata';
 import { normalizeTokens } from './token-engine';
 import { hasNavigationTag } from './validator';
+import { ZONE_LINK_POLICY } from './static-site-contract';
 
 function createReport(report: CheckReport): CheckReport {
   return {
@@ -65,9 +66,9 @@ function isKnownInternalHref(value: string, knownPaths: Set<string>) {
   return knownPaths.has(normalizePath(value.split('#')[0]));
 }
 
-function isUnsafeHref(value: string) {
+function isUnsafeHrefByPolicy(value: string, forbiddenProtocols: readonly string[]) {
   const normalized = value.trim().toLowerCase();
-  return normalized.startsWith('javascript:') || normalized.startsWith('data:text/html');
+  return forbiddenProtocols.some((protocol) => normalized.startsWith(protocol));
 }
 
 function isExplicitExternalHref(value: string) {
@@ -79,6 +80,21 @@ function isExplicitExternalHref(value: string) {
     normalized.startsWith('tel:') ||
     normalized.startsWith('#')
   );
+}
+
+function hasAllowedProtocol(value: string, allowedProtocols: readonly string[]) {
+  const normalized = value.trim().toLowerCase();
+  return allowedProtocols.some((protocol) => normalized.startsWith(protocol));
+}
+
+function isAmbiguousHostHref(value: string) {
+  const normalized = value.trim();
+
+  if (normalized.length === 0 || normalized.includes(' ') || normalized.startsWith('//')) {
+    return false;
+  }
+
+  return /^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(normalized);
 }
 
 function isManagedAssetPublicPath(value: string) {
@@ -416,9 +432,15 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
       }
     }
 
-    for (const [zone, zoneContract] of Object.entries(page.zones) as Array<
-      [keyof PageContract['zones'], NonNullable<PageContract['zones'][keyof PageContract['zones']]>]
-    >) {
+    for (const zone of publisherZoneTypes) {
+      const zoneContract = resolveEffectiveZoneContract(page, zone, state.project.sharedShell);
+
+      if (!zoneContract) {
+        continue;
+      }
+
+      const linkPolicy = ZONE_LINK_POLICY[zone];
+
       for (const slot of zoneContract.slots) {
         const block = registry.getById(slot.blockId);
 
@@ -452,6 +474,7 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
 
           if (
             (loweredKey.includes('href') || loweredKey.includes('link')) &&
+            linkPolicy.enforceKnownInternal &&
             !isKnownInternalHref(value, knownPagePaths)
           ) {
             reports.push(
@@ -469,7 +492,10 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
             );
           }
 
-          if ((loweredKey.includes('href') || loweredKey.includes('link')) && isUnsafeHref(value)) {
+          if (
+            (loweredKey.includes('href') || loweredKey.includes('link')) &&
+            isUnsafeHrefByPolicy(value, linkPolicy.forbiddenProtocols)
+          ) {
             reports.push(
               createReleaseReport({
                 name: 'link-policy',
@@ -484,7 +510,28 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
 
           if (
             (loweredKey.includes('href') || loweredKey.includes('link')) &&
+            linkPolicy.enforceDecorativeAmbiguousHost &&
+            isAmbiguousHostHref(value)
+          ) {
+            reports.push(
+              createReleaseReport({
+                name: 'zone-link-policy',
+                status: 'fail',
+                message: `Block "${block.name}" uses a non-normalized host link in decorative zone.`,
+                details: [
+                  `${page.name}/${slot.id}/${key}: ${value}`,
+                  'Use https://-prefixed URLs, internal paths starting with "/", or mailto:/tel:/# links.',
+                ],
+                pageId: page.id,
+                zone,
+              }),
+            );
+          }
+
+          if (
+            (loweredKey.includes('href') || loweredKey.includes('link')) &&
             !isInternalHref(value) &&
+            !hasAllowedProtocol(value, linkPolicy.allowedProtocols) &&
             !isExplicitExternalHref(value)
           ) {
             reports.push(
