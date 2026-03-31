@@ -4,7 +4,7 @@ import { PublisherBlockRegistry, publisherBlockRegistry } from './block-registry
 import { describePublisherSlotEditing, loadPublisherState } from './contracts';
 import { assemblePublisherProject } from './assembler';
 import { runPublisherChecks } from './checker';
-import { buildCanonicalUrl } from './metadata';
+import { buildCanonicalUrl, normalizeAbsoluteUrl } from './metadata';
 import { derivePublisherWorkflowState } from './status';
 import { buildIntakePageChecks } from './intake';
 import { buildPublisherContractsFromIntakeSession } from './intake-pipeline';
@@ -652,7 +652,7 @@ describe('publisher workflow', () => {
     expect(checks.some((report) => report.name === 'release-gate' && report.status === 'fail')).toBe(true);
   });
 
-  it('fails release checks when canonical URL is not represented in sitemap output', () => {
+  it('normalizes canonical URL variants before sitemap consistency checks', () => {
     const files = createPublisherFiles();
     files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
       type: 'file',
@@ -684,7 +684,7 @@ describe('publisher workflow', () => {
             title: 'Publisher Mode',
             description: 'Structured static site generation',
             schemaType: 'WebPage',
-            canonicalPath: '/landing/',
+            canonicalPath: '/landing',
           },
         },
         null,
@@ -696,7 +696,67 @@ describe('publisher workflow', () => {
     const checks = runPublisherChecks(state, publisherBlockRegistry);
 
     expect(checks.some((report) => report.name === 'sitemap-canonical-consistency' && report.status === 'fail')).toBe(
-      true,
+      false,
+    );
+  });
+
+  it('canonical URL normalization still fails true canonical collisions', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/about.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'about',
+          slug: 'about',
+          name: 'About',
+          path: '/about',
+          zones: {
+            content: {
+              slots: [],
+            },
+          },
+          seo: {
+            title: 'About',
+            description: 'About page',
+            canonicalPath: '/landing/',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/landing',
+          zones: {
+            content: {
+              slots: [],
+            },
+          },
+          seo: {
+            title: 'Home',
+            description: 'Home page',
+            canonicalPath: '/landing',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+
+    expect(checks.some((report) => report.name === 'canonical-collision' && report.status === 'fail')).toBe(true);
+    expect(normalizeAbsoluteUrl('https://demo.example/page/')).toBe(normalizeAbsoluteUrl('https://demo.example/page'));
+    expect(normalizeAbsoluteUrl('https://demo.example/page-a/')).not.toBe(
+      normalizeAbsoluteUrl('https://demo.example/page-b/'),
     );
   });
 

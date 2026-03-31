@@ -15,6 +15,7 @@ import {
   buildSitemapXml,
   extractSitemapLocations,
   hasCompleteSeo,
+  normalizeAbsoluteUrl,
   parseRobotsSitemapUrl,
 } from './metadata';
 import { normalizeTokens } from './token-engine';
@@ -293,20 +294,21 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
     }
 
     const canonicalUrl = buildCanonicalUrl(page, state.project.siteUrl);
+    const normalizedCanonicalUrl = normalizeAbsoluteUrl(canonicalUrl);
 
-    if (canonicalUrl) {
-      if (seenCanonicals.has(canonicalUrl)) {
+    if (normalizedCanonicalUrl) {
+      if (seenCanonicals.has(normalizedCanonicalUrl)) {
         reports.push(
           createReleaseReport({
             name: 'canonical-collision',
             status: 'fail',
             message: `Page "${page.name}" resolves to a duplicate canonical URL.`,
-            details: [seenCanonicals.get(canonicalUrl) || '', page.id, canonicalUrl],
+            details: [seenCanonicals.get(normalizedCanonicalUrl) || '', page.id, normalizedCanonicalUrl],
             pageId: page.id,
           }),
         );
       } else {
-        seenCanonicals.set(canonicalUrl, page.id);
+        seenCanonicals.set(normalizedCanonicalUrl, page.id);
       }
     }
 
@@ -634,7 +636,7 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
           pageId: page.id,
         }),
       );
-    } else if (!canonicalUrl) {
+    } else if (!normalizedCanonicalUrl) {
       reports.push(
         createReleaseReport({
           name: 'canonical-url',
@@ -658,14 +660,15 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
       );
     }
 
-    if (state.project.siteUrl && canonicalUrl) {
+    if (state.project.siteUrl && normalizedCanonicalUrl) {
       try {
         const schema = JSON.parse(buildSchemaJson(state, page)) as Record<string, unknown>;
         const schemaUrl = typeof schema.url === 'string' ? schema.url : undefined;
+        const normalizedSchemaUrl = normalizeAbsoluteUrl(schemaUrl);
         const schemaType = typeof schema['@type'] === 'string' ? schema['@type'] : undefined;
         const expectedSchemaType = page.seo.schemaType ?? 'WebPage';
 
-        if (!schemaUrl) {
+        if (!normalizedSchemaUrl) {
           reports.push(
             createReleaseReport({
               name: 'schema-url',
@@ -675,13 +678,13 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
               pageId: page.id,
             }),
           );
-        } else if (schemaUrl !== canonicalUrl) {
+        } else if (normalizedSchemaUrl !== normalizedCanonicalUrl) {
           reports.push(
             createReleaseReport({
               name: 'schema-canonical-consistency',
               status: 'fail',
               message: `Page "${page.name}" schema URL does not match canonical URL.`,
-              details: [schemaUrl, canonicalUrl],
+              details: [normalizedSchemaUrl, normalizedCanonicalUrl],
               pageId: page.id,
             }),
           );
@@ -765,12 +768,16 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
       );
     }
 
-    const sitemapLocations = new Set(extractSitemapLocations(sitemapXml));
+    const sitemapLocations = new Set(
+      extractSitemapLocations(sitemapXml)
+        .map((value) => normalizeAbsoluteUrl(value))
+        .filter((value): value is string => Boolean(value)),
+    );
     const expectedIndexedUrls = new Set<string>();
     const expectedNoindexUrls = new Set<string>();
 
     state.pages.forEach((page) => {
-      const canonicalUrl = buildCanonicalUrl(page, state.project?.siteUrl);
+      const canonicalUrl = normalizeAbsoluteUrl(buildCanonicalUrl(page, state.project?.siteUrl));
 
       if (!canonicalUrl) {
         return;

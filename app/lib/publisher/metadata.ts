@@ -4,6 +4,38 @@ function trimTrailingSlash(value: string) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
+export function normalizeCanonicalPath(path?: string) {
+  const rawPath = path?.trim();
+
+  if (!rawPath || rawPath === '/') {
+    return '/';
+  }
+
+  const withLeadingSlash = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const [pathname, suffix = ''] = withLeadingSlash.split(/([?#].*)/, 2);
+  const cleanedPathname = pathname.replace(/\/+/g, '/').replace(/\/+$/, '');
+
+  return `${cleanedPathname || '/'}${suffix}`;
+}
+
+export function normalizeAbsoluteUrl(url?: string) {
+  if (!url?.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const normalizedPath = normalizeCanonicalPath(parsed.pathname);
+
+    parsed.pathname = normalizedPath;
+    parsed.hash = '';
+
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
 export function normalizeSiteUrl(siteUrl?: string) {
   if (!siteUrl?.trim()) {
     return undefined;
@@ -23,13 +55,15 @@ export function buildAbsoluteUrl(path: string, siteUrl?: string) {
 }
 
 export function buildCanonicalUrl(page: Pick<PageContract, 'path' | 'seo'>, siteUrl?: string) {
-  return buildAbsoluteUrl(page.seo.canonicalPath ?? page.path, siteUrl);
+  const canonicalPath = normalizeCanonicalPath(page.seo.canonicalPath ?? page.path);
+
+  return buildAbsoluteUrl(canonicalPath, siteUrl);
 }
 
 export function buildSchemaJson(state: LoadedPublisherState, page: PageContract) {
   const siteUrl = state.project?.siteUrl ?? (state.project?.domain ? `https://${state.project.domain}` : undefined);
   const schemaType = page.seo.schemaType ?? 'WebPage';
-  const canonicalPath = page.seo.canonicalPath ?? page.path;
+  const canonicalPath = normalizeCanonicalPath(page.seo.canonicalPath ?? page.path);
 
   return JSON.stringify(
     {
@@ -149,7 +183,11 @@ export function buildSitemapXml(state: LoadedPublisherState) {
 
   const urls = state.pages
     .filter((page) => !page.seo.robots?.toLowerCase().includes('noindex'))
-    .map((page) => `<url><loc>${buildAbsoluteUrl(page.path, baseUrl)}</loc></url>`)
+    .map((page) => {
+      const canonicalPath = normalizeCanonicalPath(page.seo.canonicalPath ?? page.path);
+
+      return `<url><loc>${buildAbsoluteUrl(canonicalPath, baseUrl)}</loc></url>`;
+    })
     .join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
