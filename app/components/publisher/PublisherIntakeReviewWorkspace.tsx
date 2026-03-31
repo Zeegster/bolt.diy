@@ -128,6 +128,9 @@ export function PublisherIntakeReviewWorkspace({
   }, [rawSource, selectedPage, selectedSourcePath]);
   const pendingDisambiguation =
     session.disambiguation?.status === 'pending' || session.scenario === 'needsDisambiguation';
+  const completionBlockers = session.completionBlockers ?? [];
+  const reviewTasks = session.reviewTasks ?? [];
+  const intakeStateLabel = completionBlockers.length > 0 ? 'Blocked' : reviewTasks.length > 0 ? 'Reviewable' : 'Ready';
   const templateCandidates =
     session.disambiguation?.templateCandidatePaths ?? session.scenarioResult?.templateCandidatePaths ?? [];
   const homeCandidates = session.disambiguation?.homeCandidatePaths ?? session.scenarioResult?.homeCandidatePaths ?? [];
@@ -229,6 +232,14 @@ export function PublisherIntakeReviewWorkspace({
             </div>
             <div className="mt-2 text-sm text-bolt-elements-textSecondary">
               {session.sourceLabel} · {session.scenario} · active: {session.activeContentFamily}
+            </div>
+            <div className="mt-1 text-xs text-bolt-elements-textSecondary">
+              Intake state: {intakeStateLabel}
+              {completionBlockers.length > 0
+                ? ` · ${completionBlockers.length} blocker(s)`
+                : reviewTasks.length > 0
+                  ? ` · ${reviewTasks.length} review task(s)`
+                  : ' · handoff-ready for contract review'}
             </div>
           </div>
 

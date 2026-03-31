@@ -174,6 +174,7 @@ export function derivePublisherWorkflowState(options: {
   const { intakeSession, checks, lastBuild } = options;
   const counts = summarizeChecks(checks);
   const status = derivePublisherProjectStatus(options);
+  const lifecycle = deriveCanonicalIntakeLifecycleState({ intakeSession, checks, lastBuild });
   const stageFromBuild = deriveReleaseStageFromBuild(lastBuild);
 
   if (status === 'published') {
@@ -188,12 +189,34 @@ export function derivePublisherWorkflowState(options: {
   }
 
   if (intakeSession && intakeSession.status !== 'applied') {
+    const completionBlockers = intakeSession.completionBlockers ?? [];
+    const reviewTasks = intakeSession.reviewTasks ?? [];
+
+    if (lifecycle === 'pending-disambiguation') {
+      return createWorkflowState(
+        'intake-review',
+        'intake',
+        'Intake is blocked by unresolved completion blockers.',
+        'Resolve completion blockers and save deterministic intake choices before continuing.',
+        `${completionBlockers.length} completion blocker(s) remain.`,
+      );
+    }
+
+    if (reviewTasks.length > 0) {
+      return createWorkflowState(
+        'intake-review',
+        'intake',
+        'Intake is reviewable and has queued non-blocking review tasks.',
+        'Complete review tasks, then apply intake to continue into contract review.',
+        `${reviewTasks.length} review task(s) remain.`,
+      );
+    }
+
     return createWorkflowState(
       'intake-review',
       'intake',
-      'Source intake still needs operator review before publisher contracts are treated as current.',
-      'Resolve intake ambiguity, repair metadata, and apply the intake session.',
-      `Current intake session status: ${intakeSession.status}`,
+      'Intake review is complete and ready for handoff into contract review.',
+      'Apply the intake session to move forward to contract and release readiness.',
     );
   }
 
