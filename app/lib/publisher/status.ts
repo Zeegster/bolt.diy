@@ -15,6 +15,14 @@ interface WorkflowReleaseStageContext {
   releaseFailureStage?: PublisherReleasePipelineStage;
 }
 
+export type CanonicalIntakeLifecycleState =
+  | 'scanned'
+  | 'pending-disambiguation'
+  | 'intake-review'
+  | 'contract-ready'
+  | 'release-ready'
+  | 'failed';
+
 export function summarizeChecks(checks: CheckReport[]) {
   return {
     pass: checks.filter((check) => check.status === 'pass').length,
@@ -98,7 +106,43 @@ export function derivePublisherProjectStatus(options: {
     return 'published';
   }
 
-  if (intakeSession && intakeSession.status !== 'applied') {
+  const lifecycle = deriveCanonicalIntakeLifecycleState({ intakeSession, checks, lastBuild });
+
+  if (lifecycle === 'failed') {
+    return 'failed';
+  }
+
+  if (lifecycle === 'release-ready') {
+    return 'release-ready';
+  }
+
+  if (lifecycle === 'contract-ready') {
+    return 'contract-ready';
+  }
+
+  if (lifecycle === 'pending-disambiguation' || lifecycle === 'intake-review') {
+    return 'intake-review';
+  }
+
+  return 'draft';
+}
+
+export function deriveCanonicalIntakeLifecycleState(options: {
+  intakeSession?: IntakeSession;
+  checks: CheckReport[];
+  lastBuild?: PublisherBuildSummary;
+}): CanonicalIntakeLifecycleState {
+  const { intakeSession, checks, lastBuild } = options;
+
+  if (!intakeSession) {
+    return 'scanned';
+  }
+
+  if (intakeSession.status === 'pending-disambiguation' || intakeSession.disambiguation?.status === 'pending') {
+    return 'pending-disambiguation';
+  }
+
+  if (intakeSession.status !== 'applied') {
     return 'intake-review';
   }
 
@@ -114,7 +158,7 @@ export function derivePublisherProjectStatus(options: {
     return lastBuild.releaseFailures > 0 ? 'failed' : 'release-ready';
   }
 
-  return 'draft';
+  return 'contract-ready';
 }
 
 export function derivePublisherWorkflowState(options: {
