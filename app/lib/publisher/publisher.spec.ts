@@ -746,6 +746,136 @@ describe('publisher workflow', () => {
     expect(checks.some((report) => report.name === 'release-gate' && report.status === 'fail')).toBe(true);
   });
 
+  it('zone link policy fails decorative-zone ambiguous host links', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+          domain: 'demo.example',
+          siteUrl: 'https://demo.example',
+          pageOrder: ['home'],
+          siteSeo: { siteName: 'Demo Site' },
+          sharedShell: {
+            header: {
+              slots: [
+                {
+                  id: 'header-main',
+                  blockId: 'site-header-basic',
+                  props: {
+                    brandName: 'Demo',
+                    primaryLinkLabel: 'Home',
+                    primaryLinkHref: 'www.example.com',
+                    secondaryLinkLabel: 'Contact',
+                    secondaryLinkHref: '/contact/',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+    const zoneReport = checks.find((report) => report.name === 'zone-link-policy' && report.zone === 'header');
+
+    expect(zoneReport?.status).toBe('fail');
+    expect(zoneReport?.pageId).toBe('home');
+    expect(checks.some((report) => report.name === 'release-gate' && report.status === 'fail')).toBe(true);
+  });
+
+  it('zone link policy allows normalized decorative links and keeps content policy strict', () => {
+    const files = createPublisherFiles();
+    files[PUBLISHER_PROJECT_FILE] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'demo-site',
+          name: 'Demo Site',
+          defaultLanguage: 'en',
+          multilingual: false,
+          languages: ['en'],
+          mode: 'publisher',
+          domain: 'demo.example',
+          siteUrl: 'https://demo.example',
+          pageOrder: ['home'],
+          siteSeo: { siteName: 'Demo Site' },
+          sharedShell: {
+            header: {
+              slots: [
+                {
+                  id: 'header-main',
+                  blockId: 'site-header-basic',
+                  props: {
+                    brandName: 'Demo',
+                    primaryLinkLabel: 'Home',
+                    primaryLinkHref: 'https://www.example.com',
+                    secondaryLinkLabel: 'Contact',
+                    secondaryLinkHref: '/contact/',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    };
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            content: {
+              slots: [
+                {
+                  id: 'hero',
+                  blockId: 'hero-centered',
+                  props: {
+                    eyebrow: 'Fast static delivery',
+                    title: 'Publisher Mode',
+                    body: 'Zone-first assembly for reusable static sites.',
+                    primaryCtaLabel: 'Start',
+                    primaryCtaHref: 'javascript:alert(1)',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+
+    expect(checks.some((report) => report.name === 'zone-link-policy')).toBe(false);
+    expect(checks.some((report) => report.name === 'link-policy' && report.status === 'fail')).toBe(true);
+  });
+
   it('fails release checks when output references internal publisher asset paths', () => {
     const files = createPublisherFiles();
     files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
