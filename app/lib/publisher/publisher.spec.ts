@@ -239,6 +239,34 @@ describe('publisher workflow', () => {
     expect(combinedTemplates).not.toMatch(/<h[1-6][\s>]/);
   });
 
+  it('keeps prose ownership in content zone only', () => {
+    const blocks = publisherBlockRegistry.listAll();
+    const contentProse = blocks.find((block) => block.id === 'content-prose');
+
+    expect(contentProse).toBeDefined();
+    expect(contentProse?.allowedZones).toEqual(['content']);
+
+    const proseSlotBlockIds = blocks
+      .filter((block) => block.slots.some((slot) => slot.kind === 'richtext'))
+      .map((block) => block.id)
+      .sort();
+
+    expect(proseSlotBlockIds).toEqual(['content-prose']);
+  });
+
+  it('prevents non-content blocks from carrying html payload slots', () => {
+    const htmlSlotOutsideContent = publisherBlockRegistry
+      .listAll()
+      .filter(
+        (block) =>
+          block.allowedZones.some((zone) => zone !== 'content') &&
+          block.slots.some((slot) => slot.key === 'html' || slot.kind === 'richtext'),
+      )
+      .map((block) => block.id);
+
+    expect(htmlSlotOutsideContent).toEqual([]);
+  });
+
   it('loads project contracts from reserved files', () => {
     const state = loadPublisherState(createPublisherFiles());
 

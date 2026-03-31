@@ -45,7 +45,7 @@
     "slots": [
       { "key": "eyebrow", "label": "Eyebrow", "kind": "text" },
       { "key": "title", "label": "Title", "required": true, "kind": "text" },
-      { "key": "body", "label": "Body", "required": true, "kind": "richtext" },
+      { "key": "body", "label": "Body", "required": true, "kind": "text" },
       { "key": "primaryCtaLabel", "label": "Primary CTA Label", "required": true, "kind": "text" },
       { "key": "primaryCtaHref", "label": "Primary CTA URL", "required": true, "kind": "link" }
     ],
