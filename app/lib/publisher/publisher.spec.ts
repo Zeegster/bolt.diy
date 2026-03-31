@@ -29,6 +29,7 @@ import {
   PUBLISHER_PUBLISH_CONTRACT_FILE,
   PUBLISHER_THEME_FILE,
 } from './constants';
+import { REQUIRED_STATIC_OUTPUT_FILES, STATIC_SHELL_LINKS } from './static-site-contract';
 import type { PublisherBlockDefinition } from '~/types/publisher';
 import type { IntakeSourceSnapshot } from '~/types/publisher';
 
@@ -442,11 +443,16 @@ describe('publisher workflow', () => {
   it('assembles preview-ready static output', () => {
     const state = loadPublisherState(createPublisherFiles());
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const indexHtml = result.files['/home/project/.bolt/publisher/generated/index.html'];
 
-    expect(result.files['/home/project/.bolt/publisher/generated/index.html']).toContain('Publisher Mode');
-    expect(result.files['/home/project/.bolt/publisher/generated/index.html']).toContain(
-      '<link rel="canonical" href="https://demo.example/"',
-    );
+    expect(indexHtml).toContain('Publisher Mode');
+    expect(indexHtml).toContain('<link rel="canonical" href="https://demo.example/"');
+    REQUIRED_STATIC_OUTPUT_FILES.forEach((requiredFilePath) => {
+      expect(result.files).toHaveProperty(requiredFilePath);
+    });
+    expect(indexHtml).toContain(`<link rel="manifest" href="${STATIC_SHELL_LINKS.manifestHref}" />`);
+    expect(indexHtml).toContain(`<link rel="stylesheet" href="${STATIC_SHELL_LINKS.cssHref}" />`);
+    expect(indexHtml).toContain(`<script src="${STATIC_SHELL_LINKS.jsSrc}"></script>`);
     expect(result.files['/home/project/.bolt/publisher/generated/assets/css/main.css']).toContain('--color-primary');
     expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"pageSourceMap"');
     expect(result.files['/home/project/.bolt/publisher/generated/provenance.json']).toContain('"artifacts"');
