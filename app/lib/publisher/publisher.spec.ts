@@ -99,6 +99,7 @@ Reference content.`,
 
 function createImportedPublisherState(overrides?: {
   mutateSession?: (session: ReturnType<typeof buildImportedBundleAdapter>['session']) => void;
+  mutateState?: (state: ReturnType<typeof loadPublisherState>) => void;
 }) {
   const result = buildImportedBundleAdapter({
     sessionId: 'publisher-imported-fixture',
@@ -134,7 +135,10 @@ function createImportedPublisherState(overrides?: {
     ]),
   ) as FileMap;
 
-  return loadPublisherState(files);
+  const state = loadPublisherState(files);
+  overrides?.mutateState?.(state);
+
+  return state;
 }
 
 function createPublisherFiles(): FileMap {
@@ -504,6 +508,8 @@ describe('publisher workflow', () => {
     expect(checks.some((report) => report.name === 'technical-file-consistency' && report.status === 'fail')).toBe(
       true,
     );
+    expect(checks[0]?.details?.some((detail) => detail.startsWith('Rule:'))).toBe(true);
+    expect(checks[0]?.details?.some((detail) => detail.startsWith('Fix:'))).toBe(true);
     expect(checks[0]?.details?.some((detail) => detail.includes('assets/js/main.js'))).toBe(true);
     expect(semantics.canPublish).toBe(false);
     expect(semantics.publishBlockers.some((value) => value.includes('technical-file-consistency'))).toBe(true);
@@ -651,6 +657,8 @@ describe('publisher workflow', () => {
 
     expect(wrapperCheck?.status).toBe('fail');
     expect(wrapperCheck?.gate).toBe('release');
+    expect(wrapperCheck?.details?.some((detail) => detail.startsWith('Rule:'))).toBe(true);
+    expect(wrapperCheck?.details?.some((detail) => detail.startsWith('Fix:'))).toBe(true);
   });
 
   it('mobile readability release checks pass when rich table and media payloads are normalized', () => {
@@ -1529,7 +1537,7 @@ describe('publisher workflow', () => {
 
     expect(workflow.status).toBe('intake-review');
     expect(workflow.step).toBe('intake');
-    expect(workflow.nextAction).toContain('Resolve intake ambiguity');
+    expect(workflow.nextAction).toContain('Apply the intake session');
   });
 
   it('derives contract review workflow state from working check failures', () => {
@@ -1629,7 +1637,7 @@ describe('publisher workflow', () => {
 
     expect(workflow.status).toBe('failed');
     expect(workflow.step).toBe('release');
-    expect(workflow.blockingReason).toContain('1 release blocking');
+    expect(workflow.blockingReason).toBe('Release blockers: canonical-url');
   });
 
   it('builds repair-oriented review drafts from intake pages', () => {
@@ -1940,12 +1948,17 @@ describe('publisher workflow', () => {
     expect(normalized.artifacts[1]?.path).toContain('robots.txt');
   });
 
-  it('allows imported pack fixtures to reach release-ready output when normalized correctly', () => {
+  it('source pack to release-ready canonical fixture reaches release-ready output when normalized correctly', () => {
     const state = createImportedPublisherState();
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
+    const workflow = derivePublisherWorkflowState({
+      checks: result.checks,
+      lastBuild: result.build,
+    });
 
     expect(result.build.releaseFailures).toBe(0);
     expect(result.pipeline.publishContract.canPublish).toBe(true);
+    expect(workflow.status).toBe('release-ready');
     expect(result.files['/home/project/.bolt/publisher/generated/index.html']).toContain('Fixture Home');
   });
 
@@ -1979,6 +1992,100 @@ describe('publisher workflow', () => {
 
     expect(failureNames).toContain('link-policy');
     expect(failureNames).toContain('managed-asset-internal-path');
+  });
+
+  it('release rule diagnostics: invariant checks emit release-fail with Rule:/Fix: details', () => {
+    const state = createImportedPublisherState({
+      mutateState: (loadedState) => {
+        const home = loadedState.pages.find((page) => page.slug === 'home');
+
+        if (!home) {
+          return;
+        }
+
+        const contentSlot = home.zones.content?.slots?.[0];
+
+        if (!contentSlot) {
+          return;
+        }
+
+        contentSlot.props.html =
+          '<table><tr><td>Cell</td></tr></table><p><img src="/assets/image.png" alt="Demo" /></p>';
+
+        if (loadedState.project?.sharedShell?.header?.slots?.[0]) {
+          loadedState.project.sharedShell.header.slots[0].props.primaryLinkHref = 'example.com/legal';
+        }
+      },
+    });
+    const checks = runPublisherChecks(state, publisherBlockRegistry);
+    const requiredNames = ['zone-link-policy', 'table-media-wrapper'] as const;
+
+    requiredNames.forEach((name) => {
+      const report = checks.find((check) => check.name === name);
+
+      expect(report?.gate).toBe('release');
+      expect(report?.status).toBe('fail');
+      expect(report?.details?.some((detail) => detail.startsWith('Rule:'))).toBe(true);
+      expect(report?.details?.some((detail) => detail.startsWith('Fix:'))).toBe(true);
+    });
+
+    const assemblerResult = assemblePublisherProject(state, publisherBlockRegistry, {
+      mode: 'publisher',
+      currentPage: 'home',
+    });
+    const mutatedFiles = { ...assemblerResult.files };
+    delete mutatedFiles['/home/project/.bolt/publisher/generated/assets/js/main.js'];
+
+    const technicalFileCheck = buildTechnicalFileConsistencyChecks(mutatedFiles).find(
+      (check) => check.name === 'technical-file-consistency',
+    );
+
+    expect(technicalFileCheck?.gate).toBe('release');
+    expect(technicalFileCheck?.status).toBe('fail');
+    expect(technicalFileCheck?.details?.some((detail) => detail.startsWith('Rule:'))).toBe(true);
+    expect(technicalFileCheck?.details?.some((detail) => detail.startsWith('Fix:'))).toBe(true);
+  });
+
+  it('source pack to release-ready broken fixture reports Release blockers: with invariant names', () => {
+    const state = createImportedPublisherState({
+      mutateState: (loadedState) => {
+        const home = loadedState.pages.find((page) => page.slug === 'home');
+
+        if (!home) {
+          return;
+        }
+
+        const contentSlot = home.zones.content?.slots?.[0];
+
+        if (!contentSlot) {
+          return;
+        }
+
+        contentSlot.props.html =
+          '<table><tr><td>Cell</td></tr></table><p><img src="/assets/image.png" alt="Demo" /></p>';
+
+        if (loadedState.project?.sharedShell?.header?.slots?.[0]) {
+          loadedState.project.sharedShell.header.slots[0].props.primaryLinkHref = 'example.com/legal';
+        }
+      },
+    });
+    const checksFirst = runPublisherChecks(state, publisherBlockRegistry);
+    const checksSecond = runPublisherChecks(state, publisherBlockRegistry);
+    const workflow = derivePublisherWorkflowState({ checks: checksFirst });
+    const failuresFirst = checksFirst
+      .filter((check) => check.gate === 'release' && check.status === 'fail')
+      .map((check) => check.name)
+      .sort();
+    const failuresSecond = checksSecond
+      .filter((check) => check.gate === 'release' && check.status === 'fail')
+      .map((check) => check.name)
+      .sort();
+
+    expect(failuresFirst).toContain('zone-link-policy');
+    expect(failuresFirst).toContain('table-media-wrapper');
+    expect(failuresFirst).toEqual(failuresSecond);
+    expect(workflow.blockingReason?.startsWith('Release blockers:')).toBe(true);
+    expect(workflow.blockingReason).toContain('zone-link-policy');
   });
 
   it('renders queue repair action for mapped constrained repair diagnostics', () => {
@@ -2043,5 +2150,10 @@ describe('publisher workflow', () => {
     expect(html).toContain(
       'No constrained repair prompt available for this diagnostic. Resolve through source/template review first.',
     );
+    expect(
+      html.match(
+        /No constrained repair prompt available for this diagnostic\. Resolve through source\/template review first\./g,
+      )?.length ?? 0,
+    ).toBe(1);
   });
 });

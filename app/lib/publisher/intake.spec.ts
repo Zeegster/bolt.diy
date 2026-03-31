@@ -4,6 +4,7 @@ import type { IntakeSourceSnapshot } from '~/types/publisher';
 import { getPublisherImportedSourcePath, resolveUniqueImportedSourcePath } from './constants';
 import { loadIntakeSession as loadIntakeSessionFromFiles } from './intake-files';
 import {
+  buildIntakeSessionChecks,
   buildIntakeSourceManifest,
   buildIntakePageChecks,
   createIntakeSession,
@@ -1537,6 +1538,94 @@ Paragraph only.`,
     expect(contentSource.session.pages.map((page) => page.sourcePath)).toEqual(
       expect.arrayContaining(['content-source/index.md', 'content-source/about.md']),
     );
+  });
+
+  it('fixture canonical intake pack is handoff-ready with no completion blockers', () => {
+    const canonical = buildImportedBundleAdapter({
+      sessionId: 'fixture-canonical-handoff',
+      sourceLabel: '/fixtures/html-bundle',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Fixture Canonical',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+
+    expect(canonical.session.status).toBe('reviewing');
+    expect(canonical.session.completionBlockers).toEqual([]);
+    expect(canonical.session.scenarioResult?.needsUserChoice).toBe(false);
+  });
+
+  it('fixture broken intake pack yields deterministic blockers and fast-sites diagnostics', () => {
+    const broken = buildImportedBundleAdapter({
+      sessionId: 'fixture-broken-handoff',
+      sourceLabel: '/fixtures/html-bundle',
+      importKind: 'html',
+      sources: hybridSources,
+      project: {
+        name: 'Fixture Broken',
+        defaultLanguage: 'en',
+        multilingual: false,
+        languages: ['en'],
+      },
+      htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
+    });
+    const primaryPage = broken.session.pages[0];
+
+    if (!primaryPage) {
+      throw new Error('Missing primary page fixture');
+    }
+
+    primaryPage.title = '';
+    primaryPage.description = '';
+    primaryPage.h1 = '';
+    broken.session.checks = buildIntakeSessionChecks(broken.session);
+    broken.session.completionBlockers = deriveIntakeWorkItems(broken.session).completionBlockers;
+
+    const applied = buildPublisherContractsFromIntakeSession({
+      ...broken.session,
+      status: 'ready',
+      disambiguation: broken.session.disambiguation
+        ? { ...broken.session.disambiguation, status: 'resolved' }
+        : undefined,
+    });
+    const home = applied.pages.find((page) => page.slug === 'home');
+
+    if (home) {
+      const contentSlot = home.zones.content?.slots?.[0];
+
+      if (!contentSlot) {
+        throw new Error('Missing content slot fixture');
+      }
+
+      contentSlot.props.html = '<table><tr><td>Cell</td></tr></table><p><img src="/assets/image.png" alt="Demo" /></p>';
+
+      if (applied.project.sharedShell?.header?.slots?.[0]) {
+        applied.project.sharedShell.header.slots[0].props.primaryLinkHref = 'example.com/legal';
+      }
+    }
+
+    const checks = runPublisherChecks(
+      {
+        project: applied.project,
+        theme: applied.theme,
+        pages: applied.pages,
+        checks: [],
+        issues: [],
+        availableFilePaths: Object.keys(applied.files),
+      },
+      publisherBlockRegistry,
+    );
+    const checkNames = checks.map((check) => check.name);
+    const blockerIds = broken.session.completionBlockers.map((blocker) => blocker.id);
+
+    expect(broken.session.completionBlockers.length).toBeGreaterThan(0);
+    expect(blockerIds).toEqual(expect.arrayContaining(['missing-page-title', 'missing-page-h1']));
+    expect(checkNames).toEqual(expect.arrayContaining(['zone-link-policy', 'table-media-wrapper']));
   });
 
   it('preserves raw markdown source across intake artifact roundtrip', () => {

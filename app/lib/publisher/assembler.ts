@@ -708,7 +708,12 @@ export function buildTechnicalFileConsistencyChecks(files: Record<string, string
       name: 'technical-file-consistency',
       status: 'fail',
       message: 'Generated technical files or shell references are inconsistent with static contract.',
-      details: [...missingOutputFiles.map((path) => `missing file: ${path}`), ...referenceMismatches],
+      details: [
+        'Rule: Generated output must include required technical files and static shell references.',
+        'Fix: Restore missing required files and ensure every generated page references manifest, stylesheet, and script shell links.',
+        ...missingOutputFiles.map((path) => `missing file: ${path}`),
+        ...referenceMismatches,
+      ],
     },
   ];
 }

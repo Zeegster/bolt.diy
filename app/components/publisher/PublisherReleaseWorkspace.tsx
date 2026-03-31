@@ -505,6 +505,7 @@ export function PublisherReleaseWorkspace({
                   <div className="space-y-2">
                     {groupChecksByKey(group.checks).map((check) => {
                       const repairIntent = deriveRepairIntentFromCheck(check.sampleCheck);
+                      const visibleDetails = check.details.slice(0, 4);
 
                       return (
                         <div key={check.key} className={`rounded-lg border p-3 text-xs ${getCheckTone(check.status)}`}>
@@ -519,8 +520,12 @@ export function PublisherReleaseWorkspace({
                           <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">
                             Inspect ({check.count}): {check.targets.join(' · ')}
                           </div>
-                          {check.details.length ? (
-                            <div className="mt-2 opacity-90">{check.details.slice(0, 4).join(' · ')}</div>
+                          {visibleDetails.length ? (
+                            <div className="mt-2 space-y-1 opacity-90">
+                              {visibleDetails.map((detail) => (
+                                <div key={`${check.key}-${detail}`}>{detail}</div>
+                              ))}
+                            </div>
                           ) : null}
                           {check.details.length > 4 ? (
                             <div className="mt-2 text-[11px] uppercase tracking-[0.16em] opacity-80">

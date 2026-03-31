@@ -106,6 +106,10 @@ export function derivePublisherProjectStatus(options: {
     return 'published';
   }
 
+  if (checks.some((check) => check.gate === 'release' && check.status === 'fail')) {
+    return 'failed';
+  }
+
   const lifecycle = deriveCanonicalIntakeLifecycleState({ intakeSession, checks, lastBuild });
 
   if (lifecycle === 'failed') {
@@ -151,6 +155,10 @@ export function deriveCanonicalIntakeLifecycleState(options: {
   }
 
   if (checks.some((check) => check.gate === 'release' && check.status === 'fail')) {
+    return 'failed';
+  }
+
+  if (lastBuild?.releaseFailures && lastBuild.releaseFailures > 0) {
     return 'failed';
   }
 
@@ -222,14 +230,21 @@ export function derivePublisherWorkflowState(options: {
 
   if (status === 'failed') {
     const failedCount = Math.max(counts.releaseFail, lastBuild?.releaseFailures ?? 0);
+    const releaseBlockerNames = Array.from(
+      new Set(checks.filter((check) => check.gate === 'release' && check.status === 'fail').map((check) => check.name)),
+    );
     const fallbackFailureStage: PublisherReleasePipelineStage | undefined = failedCount > 0 ? 'check' : undefined;
+    const blockingReason =
+      releaseBlockerNames.length > 0
+        ? `Release blockers: ${releaseBlockerNames.join(', ')}`
+        : `${failedCount} release blocking check(s) failed.`;
 
     return createWorkflowState(
       'failed',
       'release',
       'Release checks are blocking publish readiness.',
       'Inspect release blockers, rebuild preview, and re-run release validation.',
-      `${failedCount} release blocking check(s) failed.`,
+      blockingReason,
       {
         releaseStage: stageFromBuild.releaseStage ?? fallbackFailureStage,
         releaseStageStatus: stageFromBuild.releaseStageStatus ?? (failedCount > 0 ? 'failed' : undefined),

@@ -551,7 +551,11 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
               name: 'table-media-wrapper',
               status: 'fail',
               message: `Block "${block.name}" violates rich-content table/media wrapper contract.`,
-              details: richPayloadViolations,
+              details: [
+                'Rule: Rich HTML tables must use publisher-table wrappers and images must use normalized media attributes.',
+                'Fix: Wrap table markup with .publisher-table-scroll + .publisher-table and add publisher-rich-media with lazy/async image attributes.',
+                ...richPayloadViolations,
+              ],
               pageId: page.id,
               zone,
             }),
@@ -629,6 +633,8 @@ export function runPublisherChecks(state: LoadedPublisherState, registry: Publis
                 status: 'fail',
                 message: `Block "${block.name}" uses a non-normalized host link in decorative zone.`,
                 details: [
+                  'Rule: Decorative-zone links must use explicit protocols, anchors, or internal paths.',
+                  'Fix: Use https:// URLs, internal /paths, or mailto:/tel:/# links for decorative zone link props.',
                   `${page.name}/${slot.id}/${key}: ${value}`,
                   'Use https://-prefixed URLs, internal paths starting with "/", or mailto:/tel:/# links.',
                 ],
