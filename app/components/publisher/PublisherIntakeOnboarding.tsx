@@ -8,6 +8,14 @@ interface AssetDraftState {
   nextFile?: File;
 }
 
+interface OnboardingFieldErrors {
+  name?: string;
+  domain?: string;
+  defaultLanguage?: string;
+  languages?: string;
+  sourceFiles?: string;
+}
+
 export interface PublisherIntakeOnboardingSubmitPayload {
   settings: PublisherSiteSettings;
   assets: {
@@ -51,6 +59,14 @@ function inferSourceLabel(files: File[]) {
   return relativePath.split('/').filter(Boolean)[0] || 'intake-source';
 }
 
+function isValidDomain(domain: string) {
+  if (!domain) {
+    return true;
+  }
+
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain);
+}
+
 export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherIntakeOnboardingProps) {
   const [name, setName] = useState('');
   const [domain, setDomain] = useState('');
@@ -63,6 +79,7 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
   const [metaImage, setMetaImage] = useState<AssetDraftState>({});
   const [logo, setLogo] = useState<AssetDraftState>({});
   const [error, setError] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<OnboardingFieldErrors>({});
   const folderInputRef = useRef<HTMLInputElement>(null);
   const filesInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,25 +92,36 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
     event.preventDefault();
     setError(undefined);
 
+    const nextFieldErrors: OnboardingFieldErrors = {};
+
     if (!name.trim()) {
-      setError('Site name is required.');
-      return;
+      nextFieldErrors.name = 'Site name is required.';
     }
 
     if (!defaultLanguage.trim()) {
-      setError('Default language is required.');
-      return;
+      nextFieldErrors.defaultLanguage = 'Default language is required.';
+    }
+
+    if (domain.trim() && !isValidDomain(domain.trim())) {
+      nextFieldErrors.domain = 'Domain must be a valid host name, for example: example.com.';
     }
 
     if (multilingual && normalizedLanguages.length < 2) {
-      setError('Multilingual mode requires at least two language codes.');
-      return;
+      nextFieldErrors.languages = 'Multilingual mode requires at least two language codes.';
     }
 
     if (sourceFiles.length === 0) {
-      setError(importKind === 'html' ? 'Select the source site folder.' : 'Select at least one document to import.');
+      nextFieldErrors.sourceFiles =
+        importKind === 'html' ? 'Select the source site folder.' : 'Select at least one document to import.';
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+
       return;
     }
+
+    setFieldErrors({});
 
     await onSubmit({
       settings: {
@@ -136,8 +164,15 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
             value={name}
             onChange={(event) => setName(event.target.value)}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-            placeholder="Spinaura Casino"
+            placeholder="Sample Publisher Site"
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={fieldErrors.name ? 'publisher-onboarding-name-error' : undefined}
           />
+          {fieldErrors.name ? (
+            <span id="publisher-onboarding-name-error" className="text-xs text-red-300">
+              {fieldErrors.name}
+            </span>
+          ) : null}
         </label>
 
         <label className="flex flex-col gap-2 text-sm">
@@ -147,16 +182,27 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
             onChange={(event) => setDomain(event.target.value)}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="example.com"
+            aria-invalid={Boolean(fieldErrors.domain)}
+            aria-describedby={fieldErrors.domain ? 'publisher-onboarding-domain-error' : undefined}
           />
+          {fieldErrors.domain ? (
+            <span id="publisher-onboarding-domain-error" className="text-xs text-red-300">
+              {fieldErrors.domain}
+            </span>
+          ) : null}
         </label>
 
         <TagInput
+          id="publisher-onboarding-default-language"
           label="Default language"
           mode="single"
           options={LANGUAGE_OPTIONS}
           value={defaultLanguage}
           onChange={(next) => setDefaultLanguage(typeof next === 'string' ? next : next[0] || 'en')}
           placeholder="Search language code"
+          required
+          hint="Use ISO-like short code (for example: en, de, fr)."
+          error={fieldErrors.defaultLanguage}
         />
 
         <label className="flex items-center gap-3 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2 text-sm">
@@ -166,16 +212,16 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
 
         <div className="xl:col-span-2">
           <TagInput
+            id="publisher-onboarding-languages"
             label="Languages list"
             mode="multiple"
             options={LANGUAGE_OPTIONS}
             value={languagesInput}
             onChange={(next) => setLanguagesInput(Array.isArray(next) ? next : next ? [next] : [])}
             placeholder="Search or type language code"
+            hint="Default language is always included."
+            error={fieldErrors.languages}
           />
-          <span className="mt-1 block text-xs text-bolt-elements-textSecondary">
-            Default language is always included.
-          </span>
         </div>
 
         <div className="xl:col-span-2 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
@@ -232,6 +278,7 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
                   : 'Choose markdown-like or text documents for structured extraction.'}
             </span>
           </div>
+          {fieldErrors.sourceFiles ? <div className="mt-2 text-xs text-red-300">{fieldErrors.sourceFiles}</div> : null}
 
           <input
             ref={filesInputRef}
@@ -252,25 +299,31 @@ export function PublisherIntakeOnboarding({ busy = false, onSubmit }: PublisherI
         </div>
 
         <IntakeAssetField
+          id="publisher-onboarding-favicon"
           label="Favicon"
           accept="image/*,.ico,.png,.svg"
           shape="square"
           selectedFile={favicon.nextFile}
           onFileChange={(file) => setFavicon({ currentLabel: file?.name, nextFile: file })}
+          helperText="Use square icon where possible for consistent browser rendering."
         />
         <IntakeAssetField
+          id="publisher-onboarding-meta-image"
           label="Meta image"
           accept="image/*"
           shape="landscape"
           selectedFile={metaImage.nextFile}
           onFileChange={(file) => setMetaImage({ currentLabel: file?.name, nextFile: file })}
+          helperText="Used as default social preview image."
         />
         <IntakeAssetField
+          id="publisher-onboarding-logo"
           label="Logo"
           accept="image/*,.svg"
           shape="square"
           selectedFile={logo.nextFile}
           onFileChange={(file) => setLogo({ currentLabel: file?.name, nextFile: file })}
+          helperText="Transparent SVG/PNG is recommended for better contrast support."
         />
       </div>
 

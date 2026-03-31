@@ -23,6 +23,12 @@ export function IntakePageEditor({
   onOpenContract,
   onOpenSource,
 }: IntakePageEditorProps) {
+  const metadataErrors = {
+    title: draft.title.trim() ? undefined : 'Title is required for release and search snippets.',
+    description: draft.description.trim() ? undefined : 'Description is required for metadata completeness.',
+    h1: draft.h1.trim() ? undefined : 'H1 is required for document structure and SEO checks.',
+  };
+
   const handleAddSection = () => {
     onChange({
       ...draft,
@@ -148,7 +154,14 @@ export function IntakePageEditor({
             onChange={(event) => onChange({ ...draft, title: event.target.value })}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="Page title"
+            aria-invalid={Boolean(metadataErrors.title)}
+            aria-describedby={metadataErrors.title ? `intake-page-title-error-${draft.pageId}` : undefined}
           />
+          {metadataErrors.title ? (
+            <span id={`intake-page-title-error-${draft.pageId}`} className="text-xs text-red-300">
+              {metadataErrors.title}
+            </span>
+          ) : null}
         </label>
 
         <label className="flex flex-col gap-2 text-sm">
@@ -158,7 +171,14 @@ export function IntakePageEditor({
             onChange={(event) => onChange({ ...draft, description: event.target.value })}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="Short summary"
+            aria-invalid={Boolean(metadataErrors.description)}
+            aria-describedby={metadataErrors.description ? `intake-page-description-error-${draft.pageId}` : undefined}
           />
+          {metadataErrors.description ? (
+            <span id={`intake-page-description-error-${draft.pageId}`} className="text-xs text-red-300">
+              {metadataErrors.description}
+            </span>
+          ) : null}
           <span className="text-[11px] text-bolt-elements-textTertiary">
             Keep this tied to the source summary. Canonical, robots, and schema metadata stay outside block props.
           </span>
@@ -171,7 +191,14 @@ export function IntakePageEditor({
             onChange={(event) => onChange({ ...draft, h1: event.target.value })}
             className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
             placeholder="Primary heading"
+            aria-invalid={Boolean(metadataErrors.h1)}
+            aria-describedby={metadataErrors.h1 ? `intake-page-h1-error-${draft.pageId}` : undefined}
           />
+          {metadataErrors.h1 ? (
+            <span id={`intake-page-h1-error-${draft.pageId}`} className="text-xs text-red-300">
+              {metadataErrors.h1}
+            </span>
+          ) : null}
         </label>
       </div>
 

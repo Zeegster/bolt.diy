@@ -20,6 +20,9 @@ import {
 } from '~/lib/publisher/intake-ui';
 import { IntakeAssetField } from './IntakeAssetField';
 import { IntakePageEditor } from './IntakePageEditor';
+import { TagInput } from '~/components/ui/TagInput';
+
+const LANGUAGE_OPTIONS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'tr', 'ru', 'uk', 'ar', 'zh', 'ja', 'ko'];
 
 interface PublisherIntakeReviewWorkspaceProps {
   session: IntakeSession;
@@ -134,6 +137,12 @@ export function PublisherIntakeReviewWorkspace({
     });
   }, [brokenPages]);
   const selectedPageChecks = selectedPage ? session.checks.filter((check) => check.pageId === selectedPage.id) : [];
+  const projectFieldErrors = {
+    name: session.project.name.trim() ? undefined : 'Site name is required.',
+    defaultLanguage: session.project.defaultLanguage.trim() ? undefined : 'Default language is required.',
+    languages:
+      session.project.languages.length > 0 ? undefined : 'At least one language code is required for project scope.',
+  };
   const selectedSourcePath = selectedPage?.storedSourcePath ?? selectedPage?.sourcePath;
   const sourceDoc: EditorDocument | undefined = rawSource
     ? {
@@ -256,7 +265,7 @@ export function PublisherIntakeReviewWorkspace({
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary">
-      <div className="flex h-full flex-col gap-4 p-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 px-4 py-3">
           <div>
             <div className="inline-flex items-center rounded-full border border-accent-500/30 bg-accent-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-300">
@@ -350,8 +359,8 @@ export function PublisherIntakeReviewWorkspace({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_420px]">
+          <div className="modern-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
               <h3 className="text-sm font-semibold">Project intake</h3>
               <p className="mt-1 text-xs text-bolt-elements-textSecondary">
@@ -365,7 +374,14 @@ export function PublisherIntakeReviewWorkspace({
                     value={session.project.name}
                     onChange={(event) => onUpdateProject({ ...session.project, name: event.target.value })}
                     className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
+                    aria-invalid={Boolean(projectFieldErrors.name)}
+                    aria-describedby={projectFieldErrors.name ? 'publisher-review-project-name-error' : undefined}
                   />
+                  {projectFieldErrors.name ? (
+                    <span id="publisher-review-project-name-error" className="text-xs text-red-300">
+                      {projectFieldErrors.name}
+                    </span>
+                  ) : null}
                 </label>
 
                 <label className="flex flex-col gap-2 text-sm">
@@ -377,31 +393,37 @@ export function PublisherIntakeReviewWorkspace({
                   />
                 </label>
 
-                <label className="flex flex-col gap-2 text-sm">
-                  <span className="text-bolt-elements-textSecondary">Default language</span>
-                  <input
-                    value={session.project.defaultLanguage}
-                    onChange={(event) => onUpdateProject({ ...session.project, defaultLanguage: event.target.value })}
-                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-                  />
-                </label>
+                <TagInput
+                  id="publisher-review-default-language"
+                  label="Default language"
+                  mode="single"
+                  options={LANGUAGE_OPTIONS}
+                  value={session.project.defaultLanguage}
+                  onChange={(next) =>
+                    onUpdateProject({
+                      ...session.project,
+                      defaultLanguage: (typeof next === 'string' ? next : next[0] || '').toLowerCase(),
+                    })
+                  }
+                  hint="Use ISO-like language code."
+                  error={projectFieldErrors.defaultLanguage}
+                />
 
-                <label className="flex flex-col gap-2 text-sm">
-                  <span className="text-bolt-elements-textSecondary">Languages</span>
-                  <input
-                    value={session.project.languages.join(', ')}
-                    onChange={(event) =>
-                      onUpdateProject({
-                        ...session.project,
-                        languages: event.target.value
-                          .split(',')
-                          .map((entry) => entry.trim().toLowerCase())
-                          .filter(Boolean),
-                      })
-                    }
-                    className="rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-3 py-2"
-                  />
-                </label>
+                <TagInput
+                  id="publisher-review-languages"
+                  label="Languages"
+                  mode="multiple"
+                  options={LANGUAGE_OPTIONS}
+                  value={session.project.languages}
+                  onChange={(next) =>
+                    onUpdateProject({
+                      ...session.project,
+                      languages: (Array.isArray(next) ? next : [next]).map((entry) => entry.toLowerCase()),
+                    })
+                  }
+                  hint="Default language should stay included in this list."
+                  error={projectFieldErrors.languages}
+                />
               </div>
 
               <div className="mt-4 space-y-3">
@@ -501,7 +523,7 @@ export function PublisherIntakeReviewWorkspace({
             </div>
 
             <div className="rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
-              <h4 className="text-sm font-semibold">Невалидные проверки</h4>
+              <h4 className="text-sm font-semibold">Invalid checks</h4>
               <div className="mt-3 space-y-2">
                 {invalidMetadataChecks.length > 0 ? (
                   invalidMetadataChecks.map((entry) => (
@@ -601,7 +623,7 @@ export function PublisherIntakeReviewWorkspace({
             </div>
           </div>
 
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+          <div className="modern-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
             {selectedPage && selectedDraft ? (
               <IntakePageEditor
                 draft={selectedDraft}
@@ -639,12 +661,12 @@ export function PublisherIntakeReviewWorkspace({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
+          <div className="modern-scrollbar min-h-0 overflow-y-auto rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-4">
             <h3 className="text-sm font-semibold">Source preview</h3>
             <div className="mt-1 text-xs text-bolt-elements-textSecondary">
               {selectedPage?.sourcePath ?? 'No source selected'}
             </div>
-            <div className="mt-4 rounded-lg border border-bolt-elements-borderColor bg-[#0b1020] p-3">
+            <div className="mt-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-3">
               {sourceDoc ? (
                 <div className="h-[720px] overflow-hidden rounded-md">
                   <CodeMirrorEditor

@@ -3,9 +3,11 @@ import type { AssetRef, IntakeAssetDraft } from '~/types/publisher';
 import { ImageAssetInput } from '~/components/ui/ImageAssetInput';
 
 export interface IntakeAssetFieldProps {
+  id?: string;
   label: string;
   shape?: 'square' | 'landscape';
   helperText?: string;
+  error?: string;
   accept: string;
   currentAsset?: AssetRef | IntakeAssetDraft;
   selectedFile?: File;
@@ -18,9 +20,11 @@ export interface IntakeAssetFieldProps {
 }
 
 export function IntakeAssetField({
+  id,
   label,
   shape = 'square',
   helperText,
+  error,
   accept,
   currentAsset,
   selectedFile,
@@ -63,6 +67,7 @@ export function IntakeAssetField({
   return (
     <div>
       <ImageAssetInput
+        id={id}
         label={label}
         accept={accept}
         shape={shape}
@@ -76,9 +81,9 @@ export function IntakeAssetField({
         }
         onChange={onFileChange}
         onClear={onClear}
+        hint={helperText}
+        error={error}
       />
-
-      {helperText ? <p className="mt-1 text-xs text-bolt-elements-textSecondary">{helperText}</p> : null}
 
       {canEditLabel && onLabelChange ? (
         <label className="mt-2 block text-xs">

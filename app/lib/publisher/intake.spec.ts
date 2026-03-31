@@ -106,13 +106,13 @@ const hybridSources: IntakeSourceSnapshot[] = [
     `<!doctype html>
 <html lang="en">
   <head>
-    <title>Spinaura Casino</title>
-    <meta name="description" content="Homepage shell for the casino project">
+    <title>Sample Publisher Site</title>
+    <meta name="description" content="Homepage shell for the sample project">
   </head>
   <body>
     <header>Header shell</header>
     <main>
-      <h1>Spinaura Casino</h1>
+      <h1>Sample Publisher Site</h1>
       <p>Shell content and hero.</p>
     </main>
     <footer>Footer shell</footer>
@@ -125,7 +125,7 @@ const hybridSources: IntakeSourceSnapshot[] = [
 <html lang="en">
   <head>
     <title>Home</title>
-    <meta name="description" content="Home page for the casino site">
+    <meta name="description" content="Home page for the sample site">
   </head>
   <body>
     <article class="article-page">
@@ -265,11 +265,11 @@ describe('intake pipeline', () => {
   it('canonical intake lifecycle moves from scan to review to release-ready for supported packs', () => {
     const adapted = buildImportedBundleAdapter({
       sessionId: 'canonical-supported',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
+        name: 'Sample Publisher Site',
         defaultLanguage: 'en',
         multilingual: false,
         languages: ['en'],
@@ -420,7 +420,7 @@ describe('intake pipeline', () => {
 
   it('classifies a hybrid site as template-plus-documents when html is forced', () => {
     const scan = scanIntakeSourceTree(hybridSources, {
-      rootPath: '/work/pinegrow/spinaura-casino-fr.com',
+      rootPath: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
     });
@@ -455,7 +455,7 @@ describe('intake pipeline', () => {
 
   it('blocks mixed intake without explicit family selection', () => {
     const scan = scanIntakeSourceTree(hybridSources, {
-      rootPath: '/work/pinegrow/spinaura-casino-fr.com',
+      rootPath: '/work/pinegrow/sample-site-fr.com',
       htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
     });
 
@@ -484,7 +484,7 @@ describe('intake pipeline', () => {
 
   it('respects the onboarding import kind as a hard override', () => {
     const scan = scanIntakeSourceTree(hybridSources, {
-      rootPath: '/work/pinegrow/spinaura-casino-fr.com',
+      rootPath: '/work/pinegrow/sample-site-fr.com',
       importKind: 'document',
       htmlDocumentFactory: (source) => createHtmlDocument(source.html ?? source.text ?? ''),
     });
@@ -501,7 +501,7 @@ describe('intake pipeline', () => {
 <html lang="en">
   <head>
     <title>Home</title>
-    <meta name="description" content="Home page for the casino site">
+    <meta name="description" content="Home page for the sample site">
   </head>
   <body>
     <article class="article-page">
@@ -517,7 +517,7 @@ describe('intake pipeline', () => {
     );
 
     expect(htmlDraft.title).toBe('Home');
-    expect(htmlDraft.description).toBe('Home page for the casino site');
+    expect(htmlDraft.description).toBe('Home page for the sample site');
     expect(htmlDraft.h1).toBe('Home');
     expect(htmlDraft.path).toBe('/');
     expect(htmlDraft.sections.length).toBeGreaterThan(0);
@@ -629,14 +629,14 @@ Repeated heading.`,
       localStorage,
     };
 
-    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/sample-site-fr.com');
     const session = createIntakeSession({
       id: 'session-1',
-      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      sourceRoot: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       scenario: 'template-plus-documents',
       activeContentFamily: 'html',
-      projectName: 'Spinaura Casino',
+      projectName: 'Sample Publisher Site',
       sourceManifest: manifest,
       pages: scanIntakeSourceTree(hybridSources, {
         importKind: 'html',
@@ -705,14 +705,14 @@ Repeated heading.`,
   });
 
   it('applies an intake session into canonical publisher contracts without mixing draft storage', () => {
-    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/sample-site-fr.com');
     const session = createIntakeSession({
       id: 'session-apply',
-      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      sourceRoot: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       scenario: 'template-plus-documents',
       activeContentFamily: 'html',
-      projectName: 'Spinaura Casino',
+      projectName: 'Sample Publisher Site',
       sourceManifest: manifest,
       pages: scanIntakeSourceTree(hybridSources, {
         importKind: 'html',
@@ -725,7 +725,7 @@ Repeated heading.`,
       referenceSourceFamily: 'document',
     });
 
-    session.project.domain = 'spinaura.example';
+    session.project.domain = 'sample.example';
     session.project.defaultLanguage = 'fr';
     session.project.languages = ['fr', 'en'];
     session.project.multilingual = true;
@@ -994,14 +994,14 @@ Paragraph only.`,
   });
 
   it('decorative zones cannot own primary content when content zone is minimal', () => {
-    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/sample-site-fr.com');
     const session = createIntakeSession({
       id: 'session-zone-ownership-fail',
-      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      sourceRoot: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       scenario: 'template-plus-documents',
       activeContentFamily: 'html',
-      projectName: 'Spinaura Casino',
+      projectName: 'Sample Publisher Site',
       sourceManifest: manifest,
       pages: scanIntakeSourceTree(hybridSources, {
         importKind: 'html',
@@ -1066,14 +1066,14 @@ Paragraph only.`,
   });
 
   it('passes decorative-zone primary-content check when content zone owns primary prose', () => {
-    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/sample-site-fr.com');
     const session = createIntakeSession({
       id: 'session-zone-ownership-pass',
-      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      sourceRoot: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       scenario: 'template-plus-documents',
       activeContentFamily: 'html',
-      projectName: 'Spinaura Casino',
+      projectName: 'Sample Publisher Site',
       sourceManifest: manifest,
       pages: scanIntakeSourceTree(hybridSources, {
         importKind: 'html',
@@ -1182,14 +1182,14 @@ Paragraph only.`,
   });
 
   it('does not build publisher contracts while disambiguation is pending', () => {
-    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/spinaura-casino-fr.com');
+    const manifest = buildIntakeSourceManifest(hybridSources, '/work/pinegrow/sample-site-fr.com');
     const session = createIntakeSession({
       id: 'session-pending',
-      sourceRoot: '/work/pinegrow/spinaura-casino-fr.com',
+      sourceRoot: '/work/pinegrow/sample-site-fr.com',
       importKind: 'html',
       scenario: 'needsDisambiguation',
       activeContentFamily: 'html',
-      projectName: 'Spinaura Casino',
+      projectName: 'Sample Publisher Site',
       sourceManifest: manifest,
       pages: [],
       shellCandidates: ['_layouts/header.html', '_layouts/footer.html'],
@@ -1290,12 +1290,12 @@ Paragraph only.`,
   it('builds deterministic intake session from imported bundle', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'imported-html-bundle',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
-        domain: 'spinaura.example',
+        name: 'Sample Publisher Site',
+        domain: 'sample.example',
         defaultLanguage: 'fr',
         multilingual: true,
         languages: ['fr', 'en'],
@@ -1320,11 +1320,11 @@ Paragraph only.`,
   it('normalizes imported bundle references', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'imported-html-references',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
+        name: 'Sample Publisher Site',
         defaultLanguage: 'fr',
         multilingual: true,
         languages: ['fr', 'en'],
@@ -1348,12 +1348,12 @@ Paragraph only.`,
   it('round-trips imported bundle intake sessions', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'imported-html-roundtrip',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
-        domain: 'spinaura.example',
+        name: 'Sample Publisher Site',
+        domain: 'sample.example',
         defaultLanguage: 'fr',
         multilingual: true,
         languages: ['fr', 'en'],
@@ -1387,11 +1387,11 @@ Paragraph only.`,
   it('intake session persistence round-trip keeps unresolved choices, selected fixes, and completion markers', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'intake-persistence-roundtrip',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
+        name: 'Sample Publisher Site',
         defaultLanguage: 'en',
         multilingual: false,
         languages: ['en'],
@@ -1445,11 +1445,11 @@ Paragraph only.`,
   it('batch normalize only targets missing metadata pages', () => {
     const result = buildImportedBundleAdapter({
       sessionId: 'imported-batch-review',
-      sourceLabel: '/imports/spinaura',
+      sourceLabel: '/imports/sample-site',
       importKind: 'html',
       sources: hybridSources,
       project: {
-        name: 'Spinaura Casino',
+        name: 'Sample Publisher Site',
         defaultLanguage: 'fr',
         multilingual: true,
         languages: ['fr', 'en'],
