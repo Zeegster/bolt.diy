@@ -382,6 +382,63 @@ describe('publisher workflow', () => {
     expect(payloadInjection?.zone).toBe('beforeContent');
   });
 
+  it('template integrity diagnostics flag decorative zones that own primary prose', () => {
+    const files = createPublisherFiles();
+    files[`${PUBLISHER_PAGES_DIR}/home.json`] = {
+      type: 'file',
+      isBinary: false,
+      content: JSON.stringify(
+        {
+          id: 'home',
+          slug: 'home',
+          name: 'Home',
+          path: '/',
+          zones: {
+            beforeContent: {
+              slots: [
+                {
+                  id: 'banner',
+                  blockId: 'before-content-band',
+                  props: {
+                    eyebrow: 'Notice',
+                    message: 'Summary',
+                    html: '<p>This decorative band carries the entire primary article narrative with extra details.</p><p>Another paragraph.</p>',
+                  },
+                },
+              ],
+            },
+            content: {
+              slots: [
+                {
+                  id: 'main',
+                  blockId: 'content-prose',
+                  props: {
+                    sectionTitle: 'Body',
+                    html: '<p>Short.</p>',
+                  },
+                },
+              ],
+            },
+          },
+          seo: {
+            title: 'Publisher Mode',
+            description: 'Structured static site generation',
+            schemaType: 'WebPage',
+          },
+        },
+        null,
+        2,
+      ),
+    };
+
+    const checks = runPublisherChecks(loadPublisherState(files), publisherBlockRegistry);
+    const primaryOwnership = checks.find((report) => report.name === 'decorative-zone-primary-content');
+
+    expect(primaryOwnership?.status).toBe('fail');
+    expect(primaryOwnership?.pageId).toBe('home');
+    expect(primaryOwnership?.zone).toBe('beforeContent');
+  });
+
   it('assembles preview-ready static output', () => {
     const state = loadPublisherState(createPublisherFiles());
     const result = assemblePublisherProject(state, publisherBlockRegistry, { mode: 'publisher', currentPage: 'home' });
@@ -414,6 +471,45 @@ describe('publisher workflow', () => {
     expect(JSON.parse(result.files['/home/project/.bolt/publisher/state.json']).latestBuild.pipeline.jobs).toHaveLength(
       4,
     );
+  });
+
+  it('preserves source heading hierarchy in generated html', () => {
+    const state = createImportedPublisherState({
+      mutateSession: (session) => {
+        const home = session.pages.find((page) => page.id === 'home');
+
+        if (!home) {
+          throw new Error('Expected home page fixture');
+        }
+
+        home.sections = [
+          {
+            id: 'overview',
+            kind: 'richtext',
+            heading: 'Overview',
+            level: 2,
+            content: 'Primary overview copy.',
+          },
+          {
+            id: 'details',
+            kind: 'richtext',
+            heading: 'Details',
+            level: 3,
+            content: 'Nested details copy.',
+          },
+        ];
+      },
+    });
+
+    const assembled = assemblePublisherProject(state, publisherBlockRegistry, {
+      mode: 'publisher',
+      currentPage: 'home',
+    });
+    const html = assembled.files['/home/project/.bolt/publisher/generated/index.html'];
+
+    expect(html).toContain('<h2>Overview</h2>');
+    expect(html).toContain('<h3>Details</h3>');
+    expect(html).not.toContain('<h1>Overview</h1>');
   });
 
   it('blocks publish contract when release checks fail', () => {
@@ -1215,6 +1311,27 @@ describe('publisher workflow', () => {
       categorizePublisherDiagnostic({
         name: 'missing-zone',
         message: 'Page contract is missing a required zone.',
+      }),
+    ).toBe('composition');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'template-heading-injection',
+        message: 'Decorative template introduced heading tags.',
+      }),
+    ).toBe('content');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'decorative-zone-content-injection',
+        message: 'Decorative zone carries article html.',
+      }),
+    ).toBe('composition');
+
+    expect(
+      categorizePublisherDiagnostic({
+        name: 'decorative-zone-primary-content',
+        message: 'Decorative zone owns primary narrative.',
       }),
     ).toBe('composition');
   });
