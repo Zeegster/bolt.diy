@@ -1,0 +1,50 @@
+name: Fetch Motion Atlas Open Anatomy Assets
+
+on:
+  push:
+    branches:
+      - tmp-motion-atlas-assets-20260830
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download versioned Vanatome / Z-Anatomy assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bundle/models bundle/atlas
+          BASE="https://raw.githubusercontent.com/vixotic/Vanatome/main/public"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/models/z-anatomy-1.4.0-full-body.glb \
+            "$BASE/models/z-anatomy-1.4.0-full-body.glb"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/models/z-anatomy-1.4.0-manifest.json \
+            "$BASE/models/z-anatomy-1.4.0-manifest.json"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/models/z-anatomy-1.4.0-registry.json \
+            "$BASE/models/z-anatomy-1.4.0-registry.json"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/atlas/catalog.json \
+            "$BASE/atlas/demo-1.4.0/catalog.json"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/atlas/full-body.metadata.json \
+            "$BASE/atlas/demo-1.4.0/full-body.metadata.json"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/ATTRIBUTION.txt \
+            "$BASE/ATTRIBUTION.txt"
+          (cd bundle && sha256sum models/* atlas/* ATTRIBUTION.txt > SHA256SUMS.txt)
+          du -ah bundle | sort -h | tail -20
+
+      - name: Upload anatomy bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-atlas-open-anatomy-assets
+          path: bundle
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
