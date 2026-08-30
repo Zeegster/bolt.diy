@@ -1,0 +1,34 @@
+name: Fetch Motion Atlas Three.js Vendor
+
+on:
+  push:
+    branches:
+      - tmp-motion-atlas-assets-20260830
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pack Three.js runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vendor
+          cd vendor
+          npm pack three@0.179.1
+          mv three-*.tgz three-0.179.1.tgz
+          sha256sum three-0.179.1.tgz > SHA256SUMS.txt
+          ls -lh
+
+      - name: Upload vendor bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-atlas-three-vendor
+          path: vendor
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
