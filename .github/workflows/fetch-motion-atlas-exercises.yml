@@ -1,0 +1,37 @@
+name: Fetch Motion Atlas Exercise Database
+
+on:
+  push:
+    branches:
+      - tmp-motion-atlas-assets-20260830
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download public-domain exercise database
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p exercise-data
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o exercise-data/free-exercise-db.json \
+            "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o exercise-data/LICENSE \
+            "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/LICENSE"
+          sha256sum exercise-data/free-exercise-db.json > exercise-data/SHA256SUMS.txt
+          ls -lh exercise-data
+
+      - name: Upload exercise bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-atlas-offline-exercises
+          path: exercise-data
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
