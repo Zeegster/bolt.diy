@@ -22,8 +22,8 @@ jobs:
             -o exercise-data/free-exercise-db.json \
             "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json"
           curl -L --fail --retry 4 --retry-all-errors \
-            -o exercise-data/LICENSE \
-            "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/LICENSE"
+            -o exercise-data/LICENSE.md \
+            "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/LICENSE.md"
           sha256sum exercise-data/free-exercise-db.json > exercise-data/SHA256SUMS.txt
           ls -lh exercise-data
 
