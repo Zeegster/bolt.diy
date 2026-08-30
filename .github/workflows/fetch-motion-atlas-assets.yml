@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download versioned Vanatome / Z-Anatomy assets
+      - name: Download versioned open anatomy assets
         shell: bash
         run: |
           set -euo pipefail
@@ -37,6 +37,9 @@ jobs:
           curl -L --fail --retry 4 --retry-all-errors \
             -o bundle/ATTRIBUTION.txt \
             "$BASE/ATTRIBUTION.txt"
+          curl -L --fail --retry 4 --retry-all-errors \
+            -o bundle/models/z-anatomy-detailed-musculoskeletal.glb \
+            "https://raw.githubusercontent.com/hpfrei/body-anatomy-3d-viewer/main/public/body.glb"
           (cd bundle && sha256sum models/* atlas/* ATTRIBUTION.txt > SHA256SUMS.txt)
           du -ah bundle | sort -h | tail -20
 
